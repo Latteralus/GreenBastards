@@ -458,7 +458,7 @@ function Transactions({ transactions, onTransactionUpdate, user, categories, loa
                 <div style={{ display: "grid", gap: 10 }}>
                   <input placeholder="Loan Name (e.g. Startup Loan)" value={form.newLoanName} onChange={e => setForm(f => ({ ...f, newLoanName: e.target.value }))} style={inputStyle} />
                   <input placeholder="Lender (e.g. Bank of DC)" value={form.newLoanLender} onChange={e => setForm(f => ({ ...f, newLoanLender: e.target.value }))} style={inputStyle} />
-                  <input type="number" step="0.01" placeholder="Interest Rate (%)" value={form.newLoanRate} onChange={e => setForm(f => ({ ...f, newLoanRate: e.target.value }))} style={inputStyle} />
+                  <input type="number" step="0.01" placeholder="MPR (%)" value={form.newLoanRate} onChange={e => setForm(f => ({ ...f, newLoanRate: e.target.value }))} style={inputStyle} />
                 </div>
               </div>
             )}
@@ -719,7 +719,7 @@ function Loans({ transactions, loans }) {
               <div style={{ color: "#c8a820", fontSize: 14, fontWeight: "bold" }}>{loan.name}</div>
               <div style={{ color: "#5a6a5a", fontSize: 11, letterSpacing: 1, textTransform: "uppercase" }}>{loan.status}</div>
             </div>
-            <div style={{ color: "#8a9a8a", fontSize: 12, marginBottom: 16 }}>Lender: {loan.lender} · {loan.interest_rate}% APR</div>
+            <div style={{ color: "#8a9a8a", fontSize: 12, marginBottom: 16 }}>Lender: {loan.lender} · {loan.interest_rate}% MPR</div>
             
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                <div style={{ color: "#5a6a5a", fontSize: 11 }}>Original</div>
