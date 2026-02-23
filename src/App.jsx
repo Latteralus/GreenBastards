@@ -329,7 +329,7 @@ function Transactions({ transactions, onTransactionUpdate, user, categories, loa
           name: form.newLoanName,
           lender: form.newLoanLender,
           interest_rate: parseFloat(form.newLoanRate) || 0,
-          balance: 0 // Initial balance, will be updated by transaction trigger or manual calculation logic
+          principal_amount: parseFloat(form.amount) || 0 // Set principal to the initial loan amount
         }])
         .select()
         .single();
@@ -819,6 +819,68 @@ function Inventory({ inventory, onInventoryUpdate }) {
   const totalInventoryValue = inventory.reduce((sum, item) => sum + (item.quantity * item.est_value), 0);
   const inputStyle = { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(180,140,20,0.2)", borderRadius: 3, padding: "8px 12px", color: "#e8e0d0", fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "Georgia, serif" };
 
+  const inputs = inventory.filter(i => i.category === 'Input' || !i.category).sort((a,b) => a.item_name.localeCompare(b.item_name));
+  const outputs = inventory.filter(i => i.category === 'Output').sort((a,b) => a.item_name.localeCompare(b.item_name));
+  const equipment = inventory.filter(i => i.category === 'Equipment').sort((a,b) => a.item_name.localeCompare(b.item_name));
+
+  const renderTable = (items, title) => {
+    if (items.length === 0) return null;
+    return (
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ color: "#8a9a8a", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10, paddingBottom: 4, borderBottom: "1px solid rgba(180,140,20,0.2)" }}>{title}</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr 1fr 2fr 2fr 1fr", gap: 10, padding: "0 10px 10px", color: "#5a6a5a", fontSize: 10, letterSpacing: 1, textTransform: "uppercase" }}>
+            <div>Item Name</div>
+            <div>Category</div>
+            <div style={{ textAlign: "right" }}>Qty</div>
+            <div style={{ textAlign: "right" }}>Unit Value</div>
+            <div style={{ textAlign: "right" }}>Total</div>
+            <div style={{ textAlign: "center" }}>Action</div>
+          </div>
+
+          {items.map(item => {
+            const isEditing = editingId === item.id;
+            const itemTotal = item.quantity * item.est_value;
+            
+            if (isEditing) {
+              return (
+                <div key={item.id} style={{ display: "grid", gridTemplateColumns: "3fr 2fr 1fr 2fr 2fr 1fr", gap: 10, alignItems: "center", background: "rgba(180,140,20,0.05)", padding: "10px", borderRadius: 3, marginBottom: 4 }}>
+                  <input value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} style={{ ...inputStyle, width: "100%" }} />
+                  <select value={editForm.category} onChange={e => setEditForm({...editForm, category: e.target.value})} style={{ ...inputStyle, width: "100%" }}>
+                    <option value="Input">Input</option>
+                    <option value="Output">Output</option>
+                    <option value="Equipment">Equipment</option>
+                  </select>
+                  <input type="number" value={editForm.quantity} onChange={e => setEditForm({...editForm, quantity: e.target.value})} style={{ ...inputStyle, width: "100%", textAlign: "right" }} />
+                  <input type="number" step="0.01" value={editForm.value} onChange={e => setEditForm({...editForm, value: e.target.value})} style={{ ...inputStyle, width: "100%", textAlign: "right" }} />
+                  <div style={{ textAlign: "right", color: "#8a9a8a", fontSize: 13 }}>-</div>
+                  <div style={{ display: "flex", gap: 5, justifyContent: "center" }}>
+                    <button onClick={handleUpdate} disabled={loading} style={{ cursor: "pointer", background: "none", border: "none", color: "#50c860" }}>✓</button>
+                    <button onClick={() => setEditingId(null)} style={{ cursor: "pointer", background: "none", border: "none", color: "#e05050" }}>✗</button>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div key={item.id} style={{ display: "grid", gridTemplateColumns: "3fr 2fr 1fr 2fr 2fr 1fr", gap: 10, alignItems: "center", padding: "8px 10px", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+                <div style={{ color: "#e8e0d0", fontSize: 13 }}>{item.item_name}</div>
+                <div style={{ color: "#8a9a8a", fontSize: 12 }}>{item.category || "Input"}</div>
+                <div style={{ textAlign: "right", color: "#c8a820", fontSize: 13 }}>{item.quantity}</div>
+                <div style={{ textAlign: "right", color: "#8a9a8a", fontSize: 12 }}>{fmt(item.est_value)}</div>
+                <div style={{ textAlign: "right", color: "#50c860", fontSize: 13, fontWeight: "bold" }}>{fmt(itemTotal)}</div>
+                <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+                  <button onClick={() => startEdit(item)} style={{ cursor: "pointer", background: "none", border: "none", color: "#8a9a8a", fontSize: 12 }}>✎</button>
+                  <button onClick={() => handleDelete(item.id)} style={{ cursor: "pointer", background: "none", border: "none", color: "#e05050", fontSize: 12 }}>🗑</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div>
       <div style={{ marginBottom: 28 }}>
@@ -834,54 +896,10 @@ function Inventory({ inventory, onInventoryUpdate }) {
           </div>
           
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr 1fr 2fr 2fr 1fr", gap: 10, padding: "0 10px 10px", borderBottom: "1px solid rgba(180,140,20,0.2)", color: "#5a6a5a", fontSize: 11, letterSpacing: 1, textTransform: "uppercase" }}>
-              <div>Item Name</div>
-              <div>Category</div>
-              <div style={{ textAlign: "right" }}>Qty</div>
-              <div style={{ textAlign: "right" }}>Unit Value</div>
-              <div style={{ textAlign: "right" }}>Total</div>
-              <div style={{ textAlign: "center" }}>Action</div>
-            </div>
-
-            {inventory.map(item => {
-              const isEditing = editingId === item.id;
-              const itemTotal = item.quantity * item.est_value;
-              
-              if (isEditing) {
-                return (
-                  <div key={item.id} style={{ display: "grid", gridTemplateColumns: "3fr 2fr 1fr 2fr 2fr 1fr", gap: 10, alignItems: "center", background: "rgba(180,140,20,0.05)", padding: "10px", borderRadius: 3 }}>
-                    <input value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} style={{ ...inputStyle, width: "100%" }} />
-                    <select value={editForm.category} onChange={e => setEditForm({...editForm, category: e.target.value})} style={{ ...inputStyle, width: "100%" }}>
-                      <option value="Input">Input</option>
-                      <option value="Output">Output</option>
-                      <option value="Equipment">Equipment</option>
-                    </select>
-                    <input type="number" value={editForm.quantity} onChange={e => setEditForm({...editForm, quantity: e.target.value})} style={{ ...inputStyle, width: "100%", textAlign: "right" }} />
-                    <input type="number" step="0.01" value={editForm.value} onChange={e => setEditForm({...editForm, value: e.target.value})} style={{ ...inputStyle, width: "100%", textAlign: "right" }} />
-                    <div style={{ textAlign: "right", color: "#8a9a8a", fontSize: 13 }}>-</div>
-                    <div style={{ display: "flex", gap: 5, justifyContent: "center" }}>
-                      <button onClick={handleUpdate} disabled={loading} style={{ cursor: "pointer", background: "none", border: "none", color: "#50c860" }}>✓</button>
-                      <button onClick={() => setEditingId(null)} style={{ cursor: "pointer", background: "none", border: "none", color: "#e05050" }}>✗</button>
-                    </div>
-                  </div>
-                );
-              }
-
-              return (
-                <div key={item.id} style={{ display: "grid", gridTemplateColumns: "3fr 2fr 1fr 2fr 2fr 1fr", gap: 10, alignItems: "center", padding: "10px", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
-                  <div style={{ color: "#e8e0d0", fontSize: 14 }}>{item.item_name}</div>
-                  <div style={{ color: "#8a9a8a", fontSize: 13 }}>{item.category || "Input"}</div>
-                  <div style={{ textAlign: "right", color: "#c8a820", fontSize: 14 }}>{item.quantity}</div>
-                  <div style={{ textAlign: "right", color: "#8a9a8a", fontSize: 13 }}>{fmt(item.est_value)}</div>
-                  <div style={{ textAlign: "right", color: "#50c860", fontSize: 14, fontWeight: "bold" }}>{fmt(itemTotal)}</div>
-                  <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
-                    <button onClick={() => startEdit(item)} style={{ cursor: "pointer", background: "none", border: "none", color: "#8a9a8a", fontSize: 14 }}>✎</button>
-                    <button onClick={() => handleDelete(item.id)} style={{ cursor: "pointer", background: "none", border: "none", color: "#e05050", fontSize: 14 }}>🗑</button>
-                  </div>
-                </div>
-              );
-            })}
-             {inventory.length === 0 && <div style={{ textAlign: "center", padding: 20, color: "#5a6a5a" }}>No inventory items found.</div>}
+            {renderTable(inputs, "Inputs (Ingredients)")}
+            {renderTable(outputs, "Outputs (Drinks / Elixirs)")}
+            {renderTable(equipment, "Equipment")}
+            {inventory.length === 0 && <div style={{ textAlign: "center", padding: 20, color: "#5a6a5a" }}>No inventory items found.</div>}
           </div>
         </div>
 
