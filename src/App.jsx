@@ -152,7 +152,7 @@ function Sidebar({ active, setActive, user, onLogout, pendingCount }) {
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: "◈" },
     { id: "transactions", label: "Transactions", icon: "⟳" },
-    { id: "inventory", label: "Inventory", icon: "📦" },
+    { id: "inventory", label: "Inventory", icon: "▦" },
     { id: "audit", label: "Audit Center", icon: "◎", cfOnly: true },
     { id: "reports", label: "Reports", icon: "▤" },
     { id: "settings", label: "Settings", icon: "⚙" },
@@ -281,7 +281,17 @@ function Dashboard({ transactions }) {
 
 function Transactions({ transactions, onTransactionUpdate, user, categories, loans }) {
   const categoryNames = categories.map(c => c.name);
-  const [form, setForm] = useState({ date: new Date().toISOString().slice(0, 10), type: "Debit", category: categoryNames[0] || "", amount: "", memo: "", loan_id: "" });
+  const [form, setForm] = useState({ 
+    date: new Date().toISOString().slice(0, 10), 
+    type: "Debit", 
+    category: categoryNames[0] || "", 
+    amount: "", 
+    memo: "", 
+    loan_id: "",
+    newLoanName: "",
+    newLoanLender: "",
+    newLoanRate: ""
+  });
   const [filter, setFilter] = useState("All");
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -303,6 +313,37 @@ function Transactions({ transactions, onTransactionUpdate, user, categories, loa
     if (!form.amount || isNaN(parseFloat(form.amount))) return;
     setLoading(true);
 
+    let finalLoanId = form.loan_id;
+
+    // Handle New Loan Creation
+    if (form.category === "Loan Proceeds" && form.loan_id === "new") {
+      if (!form.newLoanName || !form.newLoanLender) {
+        alert("Please enter Loan Name and Lender.");
+        setLoading(false);
+        return;
+      }
+
+      const { data: loanData, error: loanError } = await supabase
+        .from('loans')
+        .insert([{
+          name: form.newLoanName,
+          lender: form.newLoanLender,
+          interest_rate: parseFloat(form.newLoanRate) || 0,
+          balance: 0 // Initial balance, will be updated by transaction trigger or manual calculation logic
+        }])
+        .select()
+        .single();
+
+      if (loanError) {
+        console.error('Error creating loan:', loanError);
+        alert('Failed to create new loan');
+        setLoading(false);
+        return;
+      }
+
+      finalLoanId = loanData.id;
+    }
+
     const newT = {
       date: form.date,
       type: form.type,
@@ -312,7 +353,7 @@ function Transactions({ transactions, onTransactionUpdate, user, categories, loa
       submitted_by: user.displayName,
       status: user.role === "CFO" ? "Approved" : "Pending",
       approved_by: user.role === "CFO" ? user.displayName : null,
-      loan_id: (form.category === "Loan Proceeds" || form.category === "Loan Repayment") ? form.loan_id : null
+      loan_id: (form.category === "Loan Proceeds" || form.category === "Loan Repayment") ? finalLoanId : null
     };
 
     const { error } = await supabase.from('transactions').insert([newT]);
@@ -322,7 +363,17 @@ function Transactions({ transactions, onTransactionUpdate, user, categories, loa
       alert('Failed to submit transaction');
     } else {
       onTransactionUpdate(); // Refresh parent data
-      setForm({ date: new Date().toISOString().slice(0, 10), type: "Debit", category: categoryNames[0] || "", amount: "", memo: "", loan_id: "" });
+      setForm({ 
+        date: new Date().toISOString().slice(0, 10), 
+        type: "Debit", 
+        category: categoryNames[0] || "", 
+        amount: "", 
+        memo: "", 
+        loan_id: "",
+        newLoanName: "",
+        newLoanLender: "",
+        newLoanRate: ""
+      });
       setSubmitted(true);
       setTimeout(() => setSubmitted(false), 3000);
     }
@@ -366,8 +417,20 @@ function Transactions({ transactions, onTransactionUpdate, user, categories, loa
                 <label style={{ display: "block", color: "#5a6a5a", fontSize: 11, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Select Loan</label>
                 <select value={form.loan_id} onChange={e => setForm(f => ({ ...f, loan_id: e.target.value }))} style={{ ...inputStyle }}>
                   <option value="">-- Select a Loan --</option>
+                  {form.category === "Loan Proceeds" && <option value="new">+ Create New Loan</option>}
                   {loans.map(l => <option key={l.id} value={l.id}>{l.name} ({l.lender})</option>)}
                 </select>
+              </div>
+            )}
+
+            {form.category === "Loan Proceeds" && form.loan_id === "new" && (
+              <div style={{ marginBottom: 14, padding: "10px", background: "rgba(180,140,20,0.1)", borderRadius: 3, border: "1px dashed rgba(180,140,20,0.3)" }}>
+                <div style={{ color: "#c8a820", fontSize: 11, fontWeight: "bold", marginBottom: 8, textTransform: "uppercase" }}>New Loan Details</div>
+                <div style={{ display: "grid", gap: 10 }}>
+                  <input placeholder="Loan Name (e.g. Startup Loan)" value={form.newLoanName} onChange={e => setForm(f => ({ ...f, newLoanName: e.target.value }))} style={inputStyle} />
+                  <input placeholder="Lender (e.g. Bank of DC)" value={form.newLoanLender} onChange={e => setForm(f => ({ ...f, newLoanLender: e.target.value }))} style={inputStyle} />
+                  <input type="number" step="0.01" placeholder="Interest Rate (%)" value={form.newLoanRate} onChange={e => setForm(f => ({ ...f, newLoanRate: e.target.value }))} style={inputStyle} />
+                </div>
               </div>
             )}
 
@@ -377,7 +440,7 @@ function Transactions({ transactions, onTransactionUpdate, user, categories, loa
             </div>
             <div style={{ marginBottom: 20 }}>
               <label style={{ display: "block", color: "#5a6a5a", fontSize: 11, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Memo</label>
-              <input value={form.memo} onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} style={inputStyle} placeholder="e.g. /db withdraw 500 - Hops restock" />
+              <input value={form.memo} onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} style={inputStyle} placeholder="Example: Bought 10 Wheat from ExampleMart." />
             </div>
             <button type="submit" disabled={loading} style={{ width: "100%", background: loading ? "rgba(180,140,20,0.3)" : "linear-gradient(135deg, #c8a820, #a08010)", border: "none", borderRadius: 3, padding: "11px", color: "#0d0a1a", fontSize: 12, fontWeight: "bold", letterSpacing: 2, textTransform: "uppercase", cursor: loading ? "default" : "pointer", fontFamily: "Georgia, serif" }}>
               {loading ? "Submitting..." : submitted ? "✓ Submitted!" : "Submit Voucher"}
@@ -689,7 +752,7 @@ function MDASection({ title, children }) {
 
 
 function Inventory({ inventory, onInventoryUpdate }) {
-  const [newItem, setNewItem] = useState({ name: "", quantity: "", value: "" });
+  const [newItem, setNewItem] = useState({ name: "", quantity: "", value: "", category: "Input" });
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [loading, setLoading] = useState(false);
@@ -701,14 +764,15 @@ function Inventory({ inventory, onInventoryUpdate }) {
     const { error } = await supabase.from('inventory').insert([{
       item_name: newItem.name,
       quantity: parseInt(newItem.quantity) || 0,
-      est_value: parseFloat(newItem.value) || 0
+      est_value: parseFloat(newItem.value) || 0,
+      category: newItem.category
     }]);
     if (error) {
       console.error(error);
       alert("Error adding item");
     } else {
       onInventoryUpdate();
-      setNewItem({ name: "", quantity: "", value: "" });
+      setNewItem({ name: "", quantity: "", value: "", category: "Input" });
     }
     setLoading(false);
   };
@@ -720,6 +784,7 @@ function Inventory({ inventory, onInventoryUpdate }) {
       item_name: editForm.name,
       quantity: parseInt(editForm.quantity) || 0,
       est_value: parseFloat(editForm.value) || 0,
+      category: editForm.category,
       last_updated: new Date()
     }).eq('id', editingId);
     
@@ -748,7 +813,7 @@ function Inventory({ inventory, onInventoryUpdate }) {
 
   const startEdit = (item) => {
     setEditingId(item.id);
-    setEditForm({ name: item.item_name, quantity: item.quantity, value: item.est_value });
+    setEditForm({ name: item.item_name, quantity: item.quantity, value: item.est_value, category: item.category || "Input" });
   };
 
   const totalInventoryValue = inventory.reduce((sum, item) => sum + (item.quantity * item.est_value), 0);
@@ -769,8 +834,9 @@ function Inventory({ inventory, onInventoryUpdate }) {
           </div>
           
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "3fr 1fr 2fr 2fr 1fr", gap: 10, padding: "0 10px 10px", borderBottom: "1px solid rgba(180,140,20,0.2)", color: "#5a6a5a", fontSize: 11, letterSpacing: 1, textTransform: "uppercase" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr 1fr 2fr 2fr 1fr", gap: 10, padding: "0 10px 10px", borderBottom: "1px solid rgba(180,140,20,0.2)", color: "#5a6a5a", fontSize: 11, letterSpacing: 1, textTransform: "uppercase" }}>
               <div>Item Name</div>
+              <div>Category</div>
               <div style={{ textAlign: "right" }}>Qty</div>
               <div style={{ textAlign: "right" }}>Unit Value</div>
               <div style={{ textAlign: "right" }}>Total</div>
@@ -783,8 +849,13 @@ function Inventory({ inventory, onInventoryUpdate }) {
               
               if (isEditing) {
                 return (
-                  <div key={item.id} style={{ display: "grid", gridTemplateColumns: "3fr 1fr 2fr 2fr 1fr", gap: 10, alignItems: "center", background: "rgba(180,140,20,0.05)", padding: "10px", borderRadius: 3 }}>
+                  <div key={item.id} style={{ display: "grid", gridTemplateColumns: "3fr 2fr 1fr 2fr 2fr 1fr", gap: 10, alignItems: "center", background: "rgba(180,140,20,0.05)", padding: "10px", borderRadius: 3 }}>
                     <input value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} style={{ ...inputStyle, width: "100%" }} />
+                    <select value={editForm.category} onChange={e => setEditForm({...editForm, category: e.target.value})} style={{ ...inputStyle, width: "100%" }}>
+                      <option value="Input">Input</option>
+                      <option value="Output">Output</option>
+                      <option value="Equipment">Equipment</option>
+                    </select>
                     <input type="number" value={editForm.quantity} onChange={e => setEditForm({...editForm, quantity: e.target.value})} style={{ ...inputStyle, width: "100%", textAlign: "right" }} />
                     <input type="number" step="0.01" value={editForm.value} onChange={e => setEditForm({...editForm, value: e.target.value})} style={{ ...inputStyle, width: "100%", textAlign: "right" }} />
                     <div style={{ textAlign: "right", color: "#8a9a8a", fontSize: 13 }}>-</div>
@@ -797,8 +868,9 @@ function Inventory({ inventory, onInventoryUpdate }) {
               }
 
               return (
-                <div key={item.id} style={{ display: "grid", gridTemplateColumns: "3fr 1fr 2fr 2fr 1fr", gap: 10, alignItems: "center", padding: "10px", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+                <div key={item.id} style={{ display: "grid", gridTemplateColumns: "3fr 2fr 1fr 2fr 2fr 1fr", gap: 10, alignItems: "center", padding: "10px", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
                   <div style={{ color: "#e8e0d0", fontSize: 14 }}>{item.item_name}</div>
+                  <div style={{ color: "#8a9a8a", fontSize: 13 }}>{item.category || "Input"}</div>
                   <div style={{ textAlign: "right", color: "#c8a820", fontSize: 14 }}>{item.quantity}</div>
                   <div style={{ textAlign: "right", color: "#8a9a8a", fontSize: 13 }}>{fmt(item.est_value)}</div>
                   <div style={{ textAlign: "right", color: "#50c860", fontSize: 14, fontWeight: "bold" }}>{fmt(itemTotal)}</div>
@@ -819,6 +891,14 @@ function Inventory({ inventory, onInventoryUpdate }) {
             <div style={{ marginBottom: 14 }}>
               <label style={{ display: "block", color: "#5a6a5a", fontSize: 11, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Item Name</label>
               <input value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} style={{ ...inputStyle, width: "100%" }} placeholder="e.g. Hops" />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", color: "#5a6a5a", fontSize: 11, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Category</label>
+              <select value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} style={{ ...inputStyle, width: "100%" }}>
+                <option value="Input">Input</option>
+                <option value="Output">Output</option>
+                <option value="Equipment">Equipment</option>
+              </select>
             </div>
             <div style={{ marginBottom: 14 }}>
               <label style={{ display: "block", color: "#5a6a5a", fontSize: 11, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Quantity</label>
