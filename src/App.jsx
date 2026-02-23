@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { supabase } from "./supabaseClient";
 
@@ -11,24 +11,85 @@ function buildChartData(transactions) {
     running += t.type === "Credit" ? t.amount : -t.amount;
     byDate[t.date] = running;
   });
-  return Object.entries(byDate).map(([date, balance]) => ({
+  
+  const data = Object.entries(byDate).map(([date, balance]) => ({
     date: date.slice(5),
     balance: parseFloat(balance.toFixed(2))
   }));
+
+  if (data.length === 0) {
+    return [
+      { date: "Start", balance: 0 },
+      { date: "Now", balance: 0 }
+    ];
+  }
+
+  if (data.length === 1) {
+    const firstDateKey = Object.keys(byDate)[0];
+    const prevDate = new Date(firstDateKey);
+    prevDate.setDate(prevDate.getDate() - 1);
+    const prevDateStr = prevDate.toISOString().slice(5, 10);
+    
+    data.unshift({ date: prevDateStr, balance: 0 });
+  }
+
+  return data;
 }
 
 function calcSummary(transactions) {
   const approved = transactions.filter(t => t.status === "Approved");
-  const revenue = approved.filter(t => t.type === "Credit").reduce((s, t) => s + t.amount, 0);
-  const expenses = approved.filter(t => t.type === "Debit").reduce((s, t) => s + t.amount, 0);
-  const balance = revenue - expenses;
+  
+  // Total Cash Flow (Treasury Balance) - Includes everything
+  const totalCredits = approved.filter(t => t.type === "Credit").reduce((s, t) => s + t.amount, 0);
+  const totalDebits = approved.filter(t => t.type === "Debit").reduce((s, t) => s + t.amount, 0);
+  const balance = totalCredits - totalDebits;
+
+  // Operating Cash Flow (Revenue/Expenses) - Excludes Financing/Savings
+  // Excluded Categories: "Savings", "Loan Proceeds", "Loan Repayment", "Capital Contribution"
+  const excludedCats = ["Savings", "Loan Proceeds", "Loan Repayment", "Capital Contribution"];
+  
+  const revenue = approved
+    .filter(t => t.type === "Credit" && !excludedCats.includes(t.category))
+    .reduce((s, t) => s + t.amount, 0);
+    
+  const expenses = approved
+    .filter(t => t.type === "Debit" && !excludedCats.includes(t.category))
+    .reduce((s, t) => s + t.amount, 0);
+
   const pending = transactions.filter(t => t.status === "Pending").length;
+  
   return { revenue, expenses, balance, pending };
+}
+
+function calcSavingsBalance(transactions) {
+  const approved = transactions.filter(t => t.status === "Approved" && t.category === "Savings");
+  const deposited = approved.filter(t => t.type === "Debit").reduce((s, t) => s + t.amount, 0); // Money LEAVING Treasury -> Savings
+  const withdrawn = approved.filter(t => t.type === "Credit").reduce((s, t) => s + t.amount, 0); // Money ENTERING Treasury <- Savings
+  return deposited - withdrawn;
+}
+
+function calcLoanLiability(transactions) {
+  const approved = transactions.filter(t => t.status === "Approved");
+  const proceeds = approved.filter(t => t.category === "Loan Proceeds").reduce((s, t) => s + t.amount, 0);
+  const repayments = approved.filter(t => t.category === "Loan Repayment").reduce((s, t) => s + t.amount, 0);
+  return proceeds - repayments;
 }
 
 function fmt(n) {
   return "$" + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+
+const CustomTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div style={{ background: "rgba(10,7,20,0.95)", border: "1px solid rgba(180,140,20,0.3)", borderRadius: 3, padding: "8px 14px" }}>
+        <div style={{ color: "#c8a820", fontSize: 13 }}>{fmt(payload[0].value)}</div>
+        <div style={{ color: "#5a6a5a", fontSize: 11 }}>{payload[0].payload.date}</div>
+      </div>
+    );
+  }
+  return null;
+};
 
 // ─── COMPONENTS ──────────────────────────────────────────────────────────────
 
@@ -42,11 +103,9 @@ function LoginScreen({ onLogin, accounts }) {
     e.preventDefault();
     setLoading(true);
     
-    // Simulate a brief network delay for UX or check directly
     setTimeout(() => {
       const user = accounts.find(u => u.username === username && u.password === password);
       if (user) { 
-        // Map DB 'position' to App 'role'
         onLogin({ ...user, role: user.position, displayName: user.username }); 
       } else { 
         setError("Invalid credentials. Check username and password."); 
@@ -84,14 +143,12 @@ function LoginScreen({ onLogin, accounts }) {
             {loading ? "Authenticating..." : "Access Portal"}
           </button>
         </form>
-
-
       </div>
     </div>
   );
 }
 
-function Sidebar({ active, setActive, user, onLogout }) {
+function Sidebar({ active, setActive, user, onLogout, pendingCount }) {
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: "◈" },
     { id: "transactions", label: "Transactions", icon: "⟳" },
@@ -121,7 +178,7 @@ function Sidebar({ active, setActive, user, onLogout }) {
               style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "11px 20px", background: isActive ? "rgba(180,140,20,0.12)" : "transparent", border: "none", borderLeft: isActive ? "2px solid #c8a820" : "2px solid transparent", color: isActive ? "#c8a820" : "#5a6a5a", cursor: "pointer", fontSize: 13, textAlign: "left", transition: "all 0.15s", fontFamily: "Georgia, serif" }}>
               <span style={{ fontSize: 16, width: 20, textAlign: "center" }}>{item.icon}</span>
               {item.label}
-              {item.id === "audit" && <span style={{ marginLeft: "auto", background: "#c8a820", color: "#0d0a1a", fontSize: 10, fontWeight: "bold", borderRadius: 10, padding: "1px 6px" }}>3</span>}
+              {item.id === "audit" && pendingCount > 0 && <span style={{ marginLeft: "auto", background: "#c8a820", color: "#0d0a1a", fontSize: 10, fontWeight: "bold", borderRadius: 10, padding: "1px 6px" }}>{pendingCount}</span>}
             </button>
           );
         })}
@@ -151,21 +208,11 @@ function StatCard({ label, value, sub, accent }) {
   );
 }
 
-function Dashboard({ transactions, user }) {
+function Dashboard({ transactions }) {
   const chartData = buildChartData(transactions);
   const { revenue, expenses, balance, pending } = calcSummary(transactions);
-
-  const CustomTooltip = ({ active, payload }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div style={{ background: "rgba(10,7,20,0.95)", border: "1px solid rgba(180,140,20,0.3)", borderRadius: 3, padding: "8px 14px" }}>
-          <div style={{ color: "#c8a820", fontSize: 13 }}>{fmt(payload[0].value)}</div>
-          <div style={{ color: "#5a6a5a", fontSize: 11 }}>{payload[0].payload.date}</div>
-        </div>
-      );
-    }
-    return null;
-  };
+  const savings = calcSavingsBalance(transactions);
+  const loanLiability = calcLoanLiability(transactions);
 
   return (
     <div>
@@ -174,11 +221,16 @@ function Dashboard({ transactions, user }) {
         <div style={{ color: "#5a6a5a", fontSize: 13, marginTop: 4 }}>February 2026 · DemocracyCraft Fiscal Period</div>
       </div>
 
-      <div style={{ display: "flex", gap: 16, marginBottom: 24 }}>
-        <StatCard label="Treasury Balance" value={fmt(balance)} sub="Approved transactions only" accent="#c8a820" />
-        <StatCard label="Total Revenue" value={fmt(revenue)} sub="Credits this period" accent="#50c860" />
-        <StatCard label="Total Expenses" value={fmt(expenses)} sub="Debits this period" accent="#e05050" />
-        <StatCard label="Pending Audit" value={pending} sub="Awaiting CFO approval" accent="#e09030" />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16, marginBottom: 24 }}>
+        <StatCard label="Treasury Balance" value={fmt(balance)} sub="Approved transactions" accent="#c8a820" />
+        <StatCard label="Operating Revenue" value={fmt(revenue)} sub="Excl. financing" accent="#50c860" />
+        <StatCard label="Operating Expenses" value={fmt(expenses)} sub="Excl. transfers" accent="#e05050" />
+        <StatCard label="Pending Audit" value={pending} sub="Items in queue" accent="#e09030" />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
+        <StatCard label="Savings Balance" value={fmt(savings)} sub="Cash Reserve" accent="#3498db" />
+        <StatCard label="Total Loan Liability" value={fmt(loanLiability)} sub="Outstanding Principal" accent="#9b59b6" />
       </div>
 
       <div style={{ background: "rgba(15,10,30,0.8)", border: "1px solid rgba(180,140,20,0.15)", borderRadius: 4, padding: "24px", marginBottom: 24 }}>
@@ -226,17 +278,22 @@ function Dashboard({ transactions, user }) {
   );
 }
 
-function Transactions({ transactions, onTransactionUpdate, user, categories }) {
+function Transactions({ transactions, onTransactionUpdate, user, categories, loans }) {
   const categoryNames = categories.map(c => c.name);
-  const [form, setForm] = useState({ date: new Date().toISOString().slice(0, 10), type: "Debit", category: categoryNames[0] || "", amount: "", memo: "" });
+  const [form, setForm] = useState({ date: new Date().toISOString().slice(0, 10), type: "Debit", category: categoryNames[0] || "", amount: "", memo: "", loan_id: "" });
   const [filter, setFilter] = useState("All");
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // Update form category default when categories load
   useEffect(() => {
-    if (categories.length > 0 && !form.category) {
-      setForm(f => ({ ...f, category: categories[0].name }));
+    if (categories.length > 0) {
+      setForm(f => {
+        if (!f.category) {
+          return { ...f, category: categories[0].name };
+        }
+        return f;
+      });
     }
   }, [categories]);
 
@@ -253,7 +310,8 @@ function Transactions({ transactions, onTransactionUpdate, user, categories }) {
       memo: form.memo,
       submitted_by: user.displayName,
       status: user.role === "CFO" ? "Approved" : "Pending",
-      approved_by: user.role === "CFO" ? user.displayName : null
+      approved_by: user.role === "CFO" ? user.displayName : null,
+      loan_id: (form.category === "Loan Proceeds" || form.category === "Loan Repayment") ? form.loan_id : null
     };
 
     const { error } = await supabase.from('transactions').insert([newT]);
@@ -263,7 +321,7 @@ function Transactions({ transactions, onTransactionUpdate, user, categories }) {
       alert('Failed to submit transaction');
     } else {
       onTransactionUpdate(); // Refresh parent data
-      setForm({ date: new Date().toISOString().slice(0, 10), type: "Debit", category: categoryNames[0] || "", amount: "", memo: "" });
+      setForm({ date: new Date().toISOString().slice(0, 10), type: "Debit", category: categoryNames[0] || "", amount: "", memo: "", loan_id: "" });
       setSubmitted(true);
       setTimeout(() => setSubmitted(false), 3000);
     }
@@ -301,6 +359,17 @@ function Transactions({ transactions, onTransactionUpdate, user, categories }) {
                 {categoryNames.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
+            
+            {(form.category === "Loan Proceeds" || form.category === "Loan Repayment") && (
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: "block", color: "#5a6a5a", fontSize: 11, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Select Loan</label>
+                <select value={form.loan_id} onChange={e => setForm(f => ({ ...f, loan_id: e.target.value }))} style={{ ...inputStyle }}>
+                  <option value="">-- Select a Loan --</option>
+                  {loans.map(l => <option key={l.id} value={l.id}>{l.name} ({l.lender})</option>)}
+                </select>
+              </div>
+            )}
+
             <div style={{ marginBottom: 14 }}>
               <label style={{ display: "block", color: "#5a6a5a", fontSize: 11, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Amount ($)</label>
               <input type="number" step="0.01" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} style={inputStyle} placeholder="0.00" />
@@ -370,7 +439,7 @@ function AuditCenter({ transactions, onTransactionUpdate, user }) {
     }
   };
 
-  const { revenue, expenses, balance } = calcSummary(transactions);
+  const { balance } = calcSummary(transactions); // This is Treasury Balance
   const pendingTotal = pending.reduce((s, t) => s + (t.type === "Credit" ? t.amount : -t.amount), 0);
 
   return (
@@ -440,14 +509,15 @@ function AuditCenter({ transactions, onTransactionUpdate, user }) {
 }
 
 function Reports({ transactions, inventory }) {
-  const approved = transactions.filter(t => t.status === "Approved");
-  const revenue = approved.filter(t => t.type === "Credit").reduce((s, t) => s + t.amount, 0);
-  const expenses = approved.filter(t => t.type === "Debit").reduce((s, t) => s + t.amount, 0);
+  const { revenue, expenses } = calcSummary(transactions);
   const netIncome = revenue - expenses;
+  const savingsBalance = calcSavingsBalance(transactions);
+  const loanLiability = calcLoanLiability(transactions);
 
   // Calculate inventory value
   const inventoryValue = inventory.reduce((sum, item) => sum + (item.quantity * (parseFloat(item.est_value) || 0)), 0);
 
+  const approved = transactions.filter(t => t.status === "Approved");
   const byCategory = {};
   approved.forEach(t => {
     if (!byCategory[t.category]) byCategory[t.category] = { credits: 0, debits: 0 };
@@ -456,10 +526,14 @@ function Reports({ transactions, inventory }) {
   });
 
   const equipmentValue = byCategory["Equipment"]?.debits || 0;
+  const capitalContributions = byCategory["Capital Contribution"]?.credits || 0;
 
   const cogs = (byCategory["Hops"]?.debits || 0) + (byCategory["Malt"]?.debits || 0) + (byCategory["Barley"]?.debits || 0) + (byCategory["Yeast"]?.debits || 0) + (byCategory["Bottles"]?.debits || 0) + (byCategory["Barrels"]?.debits || 0);
-  const operatingExpenses = expenses - cogs;
+  // Removed unused operatingExpenses
   const grossProfit = revenue - cogs;
+  
+  // Treasury Balance (Actual Cash)
+  const treasuryBalance = approved.filter(t => t.type === "Credit").reduce((s,t) => s+t.amount, 0) - approved.filter(t => t.type === "Debit").reduce((s,t) => s+t.amount, 0);
 
   const [active, setActive] = useState("income");
 
@@ -516,19 +590,20 @@ function Reports({ transactions, inventory }) {
               <div style={{ color: "#8a9a8a", fontSize: 13, marginTop: 4 }}>Balance Sheet · February 22, 2026</div>
             </div>
             <SectionHeader label="ASSETS" />
-            <Row label="Cash (/db Balance)" val={revenue - expenses} color="#50c860" />
+            <Row label="Cash (Treasury)" val={treasuryBalance} color="#50c860" />
+            <Row label="Savings Account" val={savingsBalance} color="#3498db" />
             <Row label="Inventory (est. market value)" val={inventoryValue} color="#50c860" sub="Finished goods on hand" />
             <Row label="Equipment & Fixtures" val={equipmentValue} color="#50c860" sub="Brewing stands, barrels (est.)" />
-            <TotalRow label="TOTAL ASSETS" val={(revenue - expenses) + inventoryValue + equipmentValue} color="#50c860" />
+            <TotalRow label="TOTAL ASSETS" val={treasuryBalance + savingsBalance + inventoryValue + equipmentValue} color="#50c860" />
             <div style={{ height: 20 }} />
             <SectionHeader label="LIABILITIES" />
-            <Row label="Accounts Payable" val={0} color="#e05050" sub="No outstanding debts" />
-            <TotalRow label="TOTAL LIABILITIES" val={0} color="#e05050" />
+            <Row label="Loans Payable" val={loanLiability} color="#e05050" sub="Outstanding principal" />
+            <TotalRow label="TOTAL LIABILITIES" val={loanLiability} color="#e05050" />
             <div style={{ height: 20 }} />
             <SectionHeader label="OWNER'S EQUITY" />
-            <Row label="Founder Capital" val={5000} color="#c8a820" />
-            <Row label="Retained Earnings" val={netIncome - 5000 + (revenue - expenses)} color="#c8a820" />
-            <TotalRow label="TOTAL EQUITY" val={(revenue - expenses) + inventoryValue + equipmentValue} color="#c8a820" large />
+            <Row label="Founder Capital" val={capitalContributions} color="#c8a820" />
+            <Row label="Retained Earnings" val={(treasuryBalance + savingsBalance + inventoryValue + equipmentValue) - loanLiability - capitalContributions} color="#c8a820" sub="(Accumulated Profit)" />
+            <TotalRow label="TOTAL EQUITY" val={(treasuryBalance + savingsBalance + inventoryValue + equipmentValue) - loanLiability} color="#c8a820" large />
           </div>
         )}
 
@@ -538,11 +613,11 @@ function Reports({ transactions, inventory }) {
               <div style={{ color: "#c8a820", fontSize: 18, fontWeight: "bold", letterSpacing: 2, textTransform: "uppercase" }}>Green Bastards Brewery</div>
               <div style={{ color: "#8a9a8a", fontSize: 13, marginTop: 4 }}>Statement of Owner's Equity · February 2026</div>
             </div>
-            <Row label="Beginning Equity (Jan 2026)" val={0} color="#c8a820" />
-            <Row label="Capital Contributions" val={5000} color="#50c860" />
+            <Row label="Beginning Equity" val={0} color="#c8a820" />
+            <Row label="Capital Contributions" val={capitalContributions} color="#50c860" />
             <Row label="Net Income This Period" val={netIncome} color={netIncome >= 0 ? "#50c860" : "#e05050"} />
             <Row label="Owner Withdrawals" val={0} color="#e05050" />
-            <TotalRow label="ENDING OWNER'S EQUITY" val={5000 + netIncome} color="#c8a820" large />
+            <TotalRow label="ENDING OWNER'S EQUITY" val={capitalContributions + netIncome} color="#c8a820" large />
           </div>
         )}
 
@@ -614,6 +689,7 @@ function MDASection({ title, children }) {
 function Settings({ user, categories }) {
   const revenueCategories = categories.filter(c => c.type === 'Revenue').map(c => c.name);
   const expenseCategories = categories.filter(c => c.type === 'Expense').map(c => c.name);
+  const otherCategories = categories.filter(c => c.type !== 'Revenue' && c.type !== 'Expense');
 
   return (
     <div>
@@ -661,6 +737,11 @@ function Settings({ user, categories }) {
           {expenseCategories.map(c => (
             <div key={c} style={{ color: "#e05050", fontSize: 13, padding: "4px 0" }}>↓ {c}</div>
           ))}
+           <div style={{ color: "#5a6a5a", fontSize: 12, marginTop: 14, marginBottom: 14 }}>Other (Assets/Liabilities/Equity)</div>
+          {otherCategories.map(c => (
+            <div key={c.name} style={{ color: "#3498db", fontSize: 13, padding: "4px 0" }}>• {c.name} ({c.type})</div>
+          ))}
+
           {user.role === "CFO" && (
             <div style={{ marginTop: 16, padding: "10px 14px", background: "rgba(180,140,20,0.06)", border: "1px dashed rgba(180,140,20,0.2)", borderRadius: 3, color: "#5a6a5a", fontSize: 12 }}>
               + Add custom categories (backend required for persistence)
@@ -680,22 +761,25 @@ export default function App() {
   const [categories, setCategories] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [inventory, setInventory] = useState([]);
+  const [loans, setLoans] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [txRes, catRes, accRes, invRes] = await Promise.all([
+      const [txRes, catRes, accRes, invRes, loanRes] = await Promise.all([
         supabase.from('transactions').select('*'),
         supabase.from('categories').select('*'),
         supabase.from('accounts').select('*'),
-        supabase.from('inventory').select('*')
+        supabase.from('inventory').select('*'),
+        supabase.from('loans').select('*')
       ]);
 
       if (txRes.error) throw txRes.error;
       if (catRes.error) throw catRes.error;
       if (accRes.error) throw accRes.error;
       if (invRes.error) throw invRes.error;
+      if (loanRes.error) throw loanRes.error;
 
       // Transform transactions to match app schema (camelCase)
       const formattedTransactions = txRes.data.map(t => ({
@@ -708,6 +792,7 @@ export default function App() {
       setCategories(catRes.data);
       setAccounts(accRes.data);
       setInventory(invRes.data);
+      setLoans(loanRes.data);
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -727,14 +812,15 @@ export default function App() {
 
   if (!user) return <LoginScreen onLogin={setUser} accounts={accounts} />;
 
+  const pendingCount = transactions.filter(t => t.status === "Pending").length;
   const pageStyle = { marginLeft: 220, minHeight: "100vh", background: "linear-gradient(160deg, #0d0a1a 0%, #111820 100%)", padding: "36px 40px", fontFamily: "Georgia, serif" };
 
   return (
     <div style={{ background: "#0a0714", minHeight: "100vh" }}>
-      <Sidebar active={active} setActive={setActive} user={user} onLogout={() => { setUser(null); setActive("dashboard"); }} />
+      <Sidebar active={active} setActive={setActive} user={user} onLogout={() => { setUser(null); setActive("dashboard"); }} pendingCount={pendingCount} />
       <div style={pageStyle}>
-        {active === "dashboard" && <Dashboard transactions={transactions} user={user} />}
-        {active === "transactions" && <Transactions transactions={transactions} onTransactionUpdate={handleTransactionUpdate} user={user} categories={categories} />}
+        {active === "dashboard" && <Dashboard transactions={transactions} />}
+        {active === "transactions" && <Transactions transactions={transactions} onTransactionUpdate={handleTransactionUpdate} user={user} categories={categories} loans={loans} />}
         {active === "audit" && user.role === "CFO" && <AuditCenter transactions={transactions} onTransactionUpdate={handleTransactionUpdate} user={user} />}
         {active === "reports" && <Reports transactions={transactions} inventory={inventory} />}
         {active === "settings" && <Settings user={user} categories={categories} />}
