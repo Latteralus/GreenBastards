@@ -3,8 +3,8 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 
 // ─── MOCK DATA ────────────────────────────────────────────────────────────────
 const USERS = [
-  { id: 1, username: "latteralus", password: "cfo123", role: "CFO", displayName: "latteralus" },
-  { id: 2, username: "exec1", password: "exec123", role: "Executive", displayName: "BrewMaster_K" },
+  { id: 1, username: "Ilatteralus", password: "cfo1239", role: "CFO", displayName: "Ilatteralus" },
+  { id: 2, username: "BALLs321", password: "exec1239", role: "CEO", displayName: "BALLs321" },
   { id: 3, username: "exec2", password: "exec123", role: "Executive", displayName: "HopHead_J" },
 ];
 
