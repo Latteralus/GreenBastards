@@ -322,6 +322,7 @@ function Transactions({ transactions, onTransactionUpdate, user, categories, loa
   const [filter, setFilter] = useState("All");
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [memoError, setMemoError] = useState(false);
 
   // Update form category default when categories load
   useEffect(() => {
@@ -347,7 +348,12 @@ function Transactions({ transactions, onTransactionUpdate, user, categories, loa
 
   const submit = async (e) => {
     e.preventDefault();
+    if (!form.memo.trim()) {
+      setMemoError(true);
+      return;
+    }
     if (!form.amount || isNaN(parseFloat(form.amount))) return;
+    setMemoError(false);
     setLoading(true);
 
     let finalLoanId = form.loan_id;
@@ -476,8 +482,8 @@ function Transactions({ transactions, onTransactionUpdate, user, categories, loa
               <input type="number" step="0.01" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} style={inputStyle} placeholder="0.00" />
             </div>
             <div style={{ marginBottom: 20 }}>
-              <label style={{ display: "block", color: "#5a6a5a", fontSize: 11, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Memo</label>
-              <input value={form.memo} onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} style={inputStyle} placeholder="Example: Bought 10 Wheat from ExampleMart." />
+              <label style={{ display: "block", color: memoError ? "#e05050" : "#5a6a5a", fontSize: 11, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Memo {memoError && <span style={{ fontWeight: "normal", textTransform: "none" }}>— A memo is required</span>}</label>
+              <input value={form.memo} onChange={e => { setForm(f => ({ ...f, memo: e.target.value })); if (memoError) setMemoError(false); }} style={{ ...inputStyle, border: memoError ? "1px solid #e05050" : inputStyle.border, background: memoError ? "rgba(224,80,80,0.08)" : inputStyle.background }} placeholder="Example: Bought 10 Wheat from ExampleMart." />
             </div>
             <button type="submit" disabled={loading} style={{ width: "100%", background: loading ? "rgba(180,140,20,0.3)" : "linear-gradient(135deg, #c8a820, #a08010)", border: "none", borderRadius: 3, padding: "11px", color: "#0d0a1a", fontSize: 12, fontWeight: "bold", letterSpacing: 2, textTransform: "uppercase", cursor: loading ? "default" : "pointer", fontFamily: "Georgia, serif" }}>
               {loading ? "Submitting..." : submitted ? "✓ Submitted!" : "Submit Voucher"}
