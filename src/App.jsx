@@ -85,19 +85,7 @@ function LoginScreen({ onLogin, accounts }) {
           </button>
         </form>
 
-        <div style={{ marginTop: 28, borderTop: "1px solid rgba(180,140,20,0.1)", paddingTop: 20 }}>
-          <div style={{ color: "#5a6a5a", fontSize: 11, textAlign: "center", marginBottom: 10, letterSpacing: 1 }}>DEMO CREDENTIALS</div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <div style={{ flex: 1, background: "rgba(180,140,20,0.06)", borderRadius: 3, padding: "8px 10px", border: "1px solid rgba(180,140,20,0.1)" }}>
-              <div style={{ color: "#c8a820", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", marginBottom: 2 }}>CFO</div>
-              <div style={{ color: "#8a9a8a", fontSize: 11 }}>ILatteralus / Cfo1239</div>
-            </div>
-            <div style={{ flex: 1, background: "rgba(40,100,50,0.06)", borderRadius: 3, padding: "8px 10px", border: "1px solid rgba(40,140,60,0.1)" }}>
-              <div style={{ color: "#50c860", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", marginBottom: 2 }}>CEO</div>
-              <div style={{ color: "#8a9a8a", fontSize: 11 }}>BALLs321 / ceo1239</div>
-            </div>
-          </div>
-        </div>
+
       </div>
     </div>
   );
