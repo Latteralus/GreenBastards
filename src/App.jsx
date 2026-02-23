@@ -73,30 +73,30 @@ function calcSavingsBalance(transactions) {
   return deposited - withdrawn;
 }
 
-function calcLoanLiability(transactions) {
+function calcLoanLiability(transactions, loans = []) {
   const approved = transactions.filter(t => t.status === "Approved");
-  
-  // Liability Increases with Proceeds (Credit)
-  // Liability Decreases with Repayments (Debit)
-  
-  const proceedsCredits = approved
-    .filter(t => t.category === "Loan Proceeds" && t.type === "Credit")
-    .reduce((s, t) => s + t.amount, 0);
-    
-  const proceedsDebits = approved
-    .filter(t => t.category === "Loan Proceeds" && t.type === "Debit")
-    .reduce((s, t) => s + t.amount, 0); // Should be zero if data is clean, but handles corrections
 
+  // Total owed = each loan's principal × (1 + interest_rate / 100)
+  // This means a $10,000 loan at 10% creates $11,000 in debt from day one
+  const totalOwed = loans.reduce((sum, loan) => {
+    const principal = parseFloat(loan.principal_amount) || 0;
+    const rate = parseFloat(loan.interest_rate) || 0;
+    return sum + principal * (1 + rate / 100);
+  }, 0);
+
+  // Subtract net repayments (Debit repayments reduce liability, Credit corrections add back)
   const repaymentDebits = approved
     .filter(t => t.category === "Loan Repayment" && t.type === "Debit")
     .reduce((s, t) => s + t.amount, 0);
     
   const repaymentCredits = approved
     .filter(t => t.category === "Loan Repayment" && t.type === "Credit")
-    .reduce((s, t) => s + t.amount, 0); // Should be zero if clean
+    .reduce((s, t) => s + t.amount, 0);
 
-  // Liability = (Proceeds IN - Proceeds Correction) - (Repayments OUT - Repayments Correction)
-  return (proceedsCredits - proceedsDebits) - (repaymentDebits - repaymentCredits);
+  const netRepayments = repaymentDebits - repaymentCredits;
+
+  // Liability = Total Owed (principal + interest) - Net Repayments
+  return totalOwed - netRepayments;
 }
 
 function fmt(n) {
@@ -236,11 +236,11 @@ function StatCard({ label, value, sub, accent }) {
   );
 }
 
-function Dashboard({ transactions, categories }) {
+function Dashboard({ transactions, categories, loans }) {
   const chartData = buildChartData(transactions);
   const { revenue, expenses, balance, pending } = calcSummary(transactions, categories);
   const savings = calcSavingsBalance(transactions);
-  const loanLiability = calcLoanLiability(transactions);
+  const loanLiability = calcLoanLiability(transactions, loans);
 
   return (
     <div>
@@ -637,18 +637,25 @@ function Loans({ transactions, loans }) {
       
     const netRepayments = repaymentDebits - repaymentCredits;
 
-    const remaining = netProceeds - netRepayments;
-    const original = parseFloat(loan.principal_amount);
+    const principal = parseFloat(loan.principal_amount) || 0;
+    const rate = parseFloat(loan.interest_rate) || 0;
+    const totalOwed = principal * (1 + rate / 100); // Principal + Interest from day one
+    const remaining = totalOwed - netRepayments;
     
-    // Progress: How much of the PRINCIPAL is paid off?
-    // If remaining is higher than original (accrued interest not tracked separately?), cap at 0%
-    // If remaining is 0, 100%
-    const progress = original > 0 ? Math.max(0, Math.min(100, ((original - remaining) / original) * 100)) : 0;
+    // Progress: How much of the TOTAL OWED (principal + interest) is paid off?
+    const progress = totalOwed > 0 ? Math.max(0, Math.min(100, ((totalOwed - remaining) / totalOwed) * 100)) : 0;
 
-    return { ...loan, remaining, original, progress };
+    return { ...loan, remaining, totalOwed, original: principal, progress };
   });
 
   // 2. Build Chart Data (Total Debt Over Time)
+  // Build a lookup of loan interest multipliers by loan_id
+  const loanMultiplier = {};
+  loans.forEach(loan => {
+    const rate = parseFloat(loan.interest_rate) || 0;
+    loanMultiplier[loan.id] = 1 + rate / 100;
+  });
+
   const buildDebtChart = () => {
     const approved = transactions.filter(t => t.status === "Approved").sort((a, b) => a.date.localeCompare(b.date));
     let running = 0;
@@ -657,7 +664,9 @@ function Loans({ transactions, loans }) {
     approved.forEach(t => {
       let change = 0;
       if (t.category === "Loan Proceeds") {
-        change = t.type === "Credit" ? t.amount : -t.amount;
+        // When a loan is taken, debt = principal × (1 + rate/100)
+        const mult = (t.loan_id && loanMultiplier[t.loan_id]) ? loanMultiplier[t.loan_id] : 1;
+        change = t.type === "Credit" ? t.amount * mult : -t.amount * mult;
       } else if (t.category === "Loan Repayment") {
         change = t.type === "Debit" ? -t.amount : t.amount;
       }
@@ -730,8 +739,12 @@ function Loans({ transactions, loans }) {
             <div style={{ color: "#8a9a8a", fontSize: 12, marginBottom: 16 }}>Lender: {loan.lender} · {loan.interest_rate}% MPR</div>
             
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-               <div style={{ color: "#5a6a5a", fontSize: 11 }}>Original</div>
+               <div style={{ color: "#5a6a5a", fontSize: 11 }}>Principal</div>
                <div style={{ color: "#e8e0d0", fontSize: 12 }}>{fmt(loan.original)}</div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+               <div style={{ color: "#5a6a5a", fontSize: 11 }}>Total Owed (incl. interest)</div>
+               <div style={{ color: "#c8a820", fontSize: 12 }}>{fmt(loan.totalOwed)}</div>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
                <div style={{ color: "#5a6a5a", fontSize: 11 }}>Remaining</div>
@@ -755,11 +768,11 @@ function Loans({ transactions, loans }) {
   );
 }
 
-function Reports({ transactions, inventory, categories }) {
+function Reports({ transactions, inventory, categories, loans }) {
   const { revenue, expenses } = calcSummary(transactions, categories);
   const netIncome = revenue - expenses;
   const savingsBalance = calcSavingsBalance(transactions);
-  const loanLiability = calcLoanLiability(transactions);
+  const loanLiability = calcLoanLiability(transactions, loans);
 
   // Calculate inventory value from inventory table (authoritative for on-hand stock)
   const inventoryValue = inventory.reduce((sum, item) => sum + (item.quantity * (parseFloat(item.est_value) || 0)), 0);
@@ -1372,12 +1385,12 @@ export default function App() {
         setActive("dashboard"); 
       }} pendingCount={pendingCount} />
       <div style={pageStyle}>
-        {active === "dashboard" && <Dashboard transactions={transactions} categories={categories} />}
+        {active === "dashboard" && <Dashboard transactions={transactions} categories={categories} loans={loans} />}
         {active === "transactions" && <Transactions transactions={transactions} onTransactionUpdate={handleTransactionUpdate} user={user} categories={categories} loans={loans} />}
         {active === "inventory" && <Inventory inventory={inventory} onInventoryUpdate={handleTransactionUpdate} />}
         {active === "loans" && <Loans transactions={transactions} loans={loans} />}
         {active === "audit" && user.role === "CFO" && <AuditCenter transactions={transactions} onTransactionUpdate={handleTransactionUpdate} user={user} categories={categories} />}
-        {active === "reports" && <Reports transactions={transactions} inventory={inventory} categories={categories} />}
+        {active === "reports" && <Reports transactions={transactions} inventory={inventory} categories={categories} loans={loans} />}
         {active === "settings" && <Settings user={user} categories={categories} onDataUpdate={handleTransactionUpdate} />}
       </div>
     </div>
