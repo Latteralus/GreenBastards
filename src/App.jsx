@@ -71,13 +71,16 @@ function calcSavingsBalance(transactions) {
 function calcLoanLiability(transactions) {
   const approved = transactions.filter(t => t.status === "Approved");
   
+  // Liability Increases with Proceeds (Credit)
+  // Liability Decreases with Repayments (Debit)
+  
   const proceedsCredits = approved
     .filter(t => t.category === "Loan Proceeds" && t.type === "Credit")
     .reduce((s, t) => s + t.amount, 0);
     
   const proceedsDebits = approved
     .filter(t => t.category === "Loan Proceeds" && t.type === "Debit")
-    .reduce((s, t) => s + t.amount, 0);
+    .reduce((s, t) => s + t.amount, 0); // Should be zero if data is clean, but handles corrections
 
   const repaymentDebits = approved
     .filter(t => t.category === "Loan Repayment" && t.type === "Debit")
@@ -85,9 +88,9 @@ function calcLoanLiability(transactions) {
     
   const repaymentCredits = approved
     .filter(t => t.category === "Loan Repayment" && t.type === "Credit")
-    .reduce((s, t) => s + t.amount, 0);
+    .reduce((s, t) => s + t.amount, 0); // Should be zero if clean
 
-  // Liability = (Net Proceeds) - (Net Repayments)
+  // Liability = (Proceeds IN - Proceeds Correction) - (Repayments OUT - Repayments Correction)
   return (proceedsCredits - proceedsDebits) - (repaymentDebits - repaymentCredits);
 }
 

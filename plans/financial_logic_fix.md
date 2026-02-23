@@ -1,95 +1,58 @@
 # Financial Logic Fix Plan
 
-## Goal
-Fix the accounting logic for "Loan Proceeds" and "Loan Repayments" to ensure they are treated correctly in liability calculations and improve the UX to prevent user error during transaction entry.
+## Objective
+Fix the accounting logic for "Loan Proceeds" to ensure they are treated as positive cash inflows (Credits) rather than expenses (Debits). This involves updating existing data and adjusting the frontend application logic.
 
 ## Analysis
-The current implementation in `src/App.jsx` has the following issues:
+The current issue stems from "Loan Proceeds" being recorded as **Debits** (money leaving). This causes:
+1.  **Treasury Balance** to decrease instead of increase.
+2.  **Loan Liability** to be calculated incorrectly (currently `proceedsCredits - proceedsDebits`).
+3.  **Retained Earnings** to be artificially low because the cash asset is understated.
 
-1.  **`calcLoanLiability` Logic Flaw**:
-    *   The function sums all transactions with category "Loan Proceeds" regardless of whether they are Credits (inflow) or Debits (outflow/correction).
-    *   It does the same for "Loan Repayments".
-    *   **Consequence**: If a user enters a correction (Debit to Loan Proceeds), it incorrectly increases the liability instead of decreasing it.
+## Plan
 
-2.  **Transaction Form UX**:
-    *   The form defaults to "Debit".
-    *   When selecting "Loan Proceeds" (which is money entering the business, i.e., Credit), the user has to manually switch the type. If they forget, it records a Debit, which reduces cash (wrong) and increases liability (double wrong due to point #1).
+### 1. Database Migration (Fix Data)
+Create a new migration file `supabase/migrations/20260223123000_fix_loan_proceeds_sign.sql` to:
+- Update all existing transactions with category 'Loan Proceeds' from `type = 'Debit'` to `type = 'Credit'`.
+- This will immediately fix the historical Treasury Balance.
 
-3.  **`calcSummary` (Revenue/Expenses)**:
-    *   "Loan Proceeds" are correctly excluded from Operating Revenue.
-    *   "Loan Repayments" are correctly excluded from Operating Expenses.
-    *   Treasury Balance is calculated as `Total Credits - Total Debits`, which is correct for actual cash on hand.
+### 2. Frontend Updates (`src/App.jsx`)
 
-## Proposed Changes
-
-### 1. Update `calcLoanLiability` in `src/App.jsx`
-
-Change the calculation to respect transaction types:
-
+#### A. Update `calcLoanLiability`
+The current formula is:
 ```javascript
-function calcLoanLiability(transactions) {
-  const approved = transactions.filter(t => t.status === "Approved");
-  
-  const proceedsCredits = approved
-    .filter(t => t.category === "Loan Proceeds" && t.type === "Credit")
-    .reduce((s, t) => s + t.amount, 0);
-    
-  const proceedsDebits = approved
-    .filter(t => t.category === "Loan Proceeds" && t.type === "Debit")
-    .reduce((s, t) => s + t.amount, 0);
-
-  const repaymentDebits = approved
-    .filter(t => t.category === "Loan Repayment" && t.type === "Debit")
-    .reduce((s, t) => s + t.amount, 0);
-    
-  const repaymentCredits = approved
-    .filter(t => t.category === "Loan Repayment" && t.type === "Credit")
-    .reduce((s, t) => s + t.amount, 0);
-
-  // Liability = (Net Proceeds) - (Net Repayments)
-  // Net Proceeds = Credits (Inflow) - Debits (Corrections)
-  // Net Repayments = Debits (Outflow) - Credits (Corrections)
-  return (proceedsCredits - proceedsDebits) - (repaymentDebits - repaymentCredits);
-}
+return (proceedsCredits - proceedsDebits) - (repaymentDebits - repaymentCredits);
 ```
+- If we flip proceeds to Credits, `proceedsCredits` will be positive.
+- We should simplify this to standard accounting logic:
+    - **Liability increases** with Loan Proceeds (Credit).
+    - **Liability decreases** with Loan Repayments (Debit).
+    - We should handle the inverse cases (corrections) gracefully.
 
-### 2. Enhance Transaction Form UX in `src/App.jsx`
-
-Add an effect to automatically switch the transaction type based on the selected category.
-
+**New Logic:**
 ```javascript
-// Inside Transactions component
-useEffect(() => {
-  if (form.category === "Loan Proceeds" || form.category === "Capital Contribution") {
-    setForm(f => ({ ...f, type: "Credit" }));
-  } else if (form.category === "Loan Repayment" || form.category === "Savings") {
-    // Savings is tricky: Debit = Deposit to Savings (Cash Out of Treasury), Credit = Withdrawal from Savings (Cash In to Treasury)
-    // Usually "Savings" category means a transfer. 
-    // If I am recording a "Savings" transaction in the Treasury Ledger:
-    // Debit = Money leaving Treasury -> Savings Account (Asset Transfer)
-    // Credit = Money entering Treasury <- Savings Account
-    
-    // Let's stick to the clear ones first.
-    setForm(f => ({ ...f, type: "Debit" }));
-  }
-}, [form.category]);
+const liability = (proceedsCredits - proceedsDebits) - (repaymentDebits - repaymentCredits);
 ```
+*Wait, if proceeds are Credits (positive), `proceedsCredits` is positive. If we subtract `proceedsDebits` (corrections), that's correct.*
+*If repayments are Debits (money out), `repaymentDebits` is positive. If we subtract `repaymentCredits` (corrections), that's correct.*
+*So: Liability = (Net Proceeds) - (Net Repayments).*
+*The formula `(proceedsCredits - proceedsDebits) - (repaymentDebits - repaymentCredits)` actually works IF proceeds are recorded as Credits. The issue was they were recorded as Debits, making the first term negative.*
 
-*Self-Correction on Savings*: The `calcSavingsBalance` function treats Debit as Deposit (Leaving Treasury) and Credit as Withdrawal (Entering Treasury). So defaulting "Savings" to Debit (Deposit) is a safe default for "putting money away".
+**Conclusion:** The formula is actually fine, but the *data* is wrong. However, I will verify the logic ensures it handles the data flip correctly.
 
-### 3. Verify `Reports` Component
+#### B. Update Transaction Form (`Transactions` component)
+- Automatically set `type` to `Credit` when "Loan Proceeds" is selected.
+- Automatically set `type` to `Debit` when "Loan Repayment" is selected.
+- This prevents future user error.
 
-Ensure the Balance Sheet matches the new logic.
-*   **Liabilities**: Uses `calcLoanLiability`. If we fix that function, the Balance Sheet updates automatically.
-*   **Equity**: Calculated as `Assets - Liabilities`. Fixing `calcLoanLiability` will strictly correct Equity.
+#### C. Verify Retained Earnings
+- `Retained Earnings = (Total Assets) - (Total Liabilities) - (Capital Contributions)`
+- **Assets:** Cash will increase by $20,000 (fixing the -$15,900 to +$4,100).
+- **Liabilities:** Loan Liability will be $20,000.
+- **Equity:** Should balance.
 
-## Implementation Steps
-
-1.  **Modify `src/App.jsx`**:
-    *   Replace `calcLoanLiability` with the robust version.
-    *   Add the `useEffect` hook in the `Transactions` component to auto-set `type`.
-
-2.  **Test**:
-    *   Verify "Loan Proceeds" increases liability.
-    *   Verify "Loan Repayment" decreases liability.
-    *   Verify "Loan Proceeds" (Debit correction) decreases liability.
+### 3. Execution Steps
+1.  Review and confirm this plan with the user.
+2.  Create the SQL migration file.
+3.  Apply the SQL migration (simulation/instruction).
+4.  Update `src/App.jsx`.
