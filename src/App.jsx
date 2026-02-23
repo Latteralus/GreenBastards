@@ -620,7 +620,7 @@ function Reports({ transactions, inventory }) {
   const equipmentValue = byCategory["Equipment"]?.debits || 0;
   const capitalContributions = byCategory["Capital Contribution"]?.credits || 0;
 
-  const cogs = (byCategory["Hops"]?.debits || 0) + (byCategory["Malt"]?.debits || 0) + (byCategory["Barley"]?.debits || 0) + (byCategory["Yeast"]?.debits || 0) + (byCategory["Bottles"]?.debits || 0) + (byCategory["Barrels"]?.debits || 0);
+  const cogs = (byCategory["Hops"]?.debits || 0) + (byCategory["Malt"]?.debits || 0) + (byCategory["Barley"]?.debits || 0) + (byCategory["Yeast"]?.debits || 0);
   // Removed unused operatingExpenses
   const grossProfit = revenue - cogs;
   
@@ -662,7 +662,7 @@ function Reports({ transactions, inventory }) {
             <Row label="Investment / Other Income" val={(byCategory["Investment"]?.credits || 0) + (byCategory["Miscellaneous"]?.credits || 0)} color="#50c860" />
             <TotalRow label="TOTAL REVENUE" val={revenue} color="#50c860" />
             <div style={{ height: 16 }} />
-            <Row label="Cost of Goods Sold (COGS)" val={-cogs} color="#e05050" sub="Hops, Malt, Barley, Yeast, Bottles, Barrels" />
+            <Row label="Cost of Goods Sold (COGS)" val={-cogs} color="#e05050" sub="Hops, Malt, Barley, Yeast" />
             <TotalRow label="GROSS PROFIT" val={grossProfit} color={grossProfit >= 0 ? "#50c860" : "#e05050"} />
             <div style={{ height: 16 }} />
             <Row label="Payroll" val={-(byCategory["Payroll"]?.debits || 0)} color="#e05050" />
