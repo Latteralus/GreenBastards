@@ -70,9 +70,25 @@ function calcSavingsBalance(transactions) {
 
 function calcLoanLiability(transactions) {
   const approved = transactions.filter(t => t.status === "Approved");
-  const proceeds = approved.filter(t => t.category === "Loan Proceeds").reduce((s, t) => s + t.amount, 0);
-  const repayments = approved.filter(t => t.category === "Loan Repayment").reduce((s, t) => s + t.amount, 0);
-  return proceeds - repayments;
+  
+  const proceedsCredits = approved
+    .filter(t => t.category === "Loan Proceeds" && t.type === "Credit")
+    .reduce((s, t) => s + t.amount, 0);
+    
+  const proceedsDebits = approved
+    .filter(t => t.category === "Loan Proceeds" && t.type === "Debit")
+    .reduce((s, t) => s + t.amount, 0);
+
+  const repaymentDebits = approved
+    .filter(t => t.category === "Loan Repayment" && t.type === "Debit")
+    .reduce((s, t) => s + t.amount, 0);
+    
+  const repaymentCredits = approved
+    .filter(t => t.category === "Loan Repayment" && t.type === "Credit")
+    .reduce((s, t) => s + t.amount, 0);
+
+  // Liability = (Net Proceeds) - (Net Repayments)
+  return (proceedsCredits - proceedsDebits) - (repaymentDebits - repaymentCredits);
 }
 
 function fmt(n) {
@@ -307,6 +323,15 @@ function Transactions({ transactions, onTransactionUpdate, user, categories, loa
       });
     }
   }, [categories]);
+
+  // Auto-switch transaction type based on category
+  useEffect(() => {
+    if (form.category === "Loan Proceeds" || form.category === "Capital Contribution") {
+      setForm(f => ({ ...f, type: "Credit" }));
+    } else if (form.category === "Loan Repayment" || form.category === "Savings") {
+      setForm(f => ({ ...f, type: "Debit" }));
+    }
+  }, [form.category]);
 
   const submit = async (e) => {
     e.preventDefault();
