@@ -172,7 +172,7 @@ function Sidebar({ active, setActive, user, onLogout, pendingCount }) {
     { id: "dashboard", label: "Dashboard", icon: "◈" },
     { id: "transactions", label: "Transactions", icon: "⟳" },
     { id: "inventory", label: "Inventory", icon: "▦" },
-    { id: "loans", label: "Loans", icon: "💰" },
+    { id: "loans", label: "Loans", icon: "❖" },
     { id: "audit", label: "Audit Center", icon: "◎", cfOnly: true },
     { id: "reports", label: "Reports", icon: "▤" },
     { id: "settings", label: "Settings", icon: "⚙" },
