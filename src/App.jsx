@@ -624,7 +624,27 @@ function Settings({ user, categories }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
         <div style={{ background: "rgba(15,10,30,0.8)", border: "1px solid rgba(180,140,20,0.15)", borderRadius: 4, padding: "24px" }}>
           <div style={{ color: "#8a9a8a", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", marginBottom: 20 }}>Company Info</div>
-          {[["Company Name", "Green Bastards Brewery"], ["DemocracyCraft Firm ID", "/firm GBB"], ["Licensed Accountant", "latteralus (IC)"], ["Fiscal Period", "Monthly"], ["Jurisdiction", "DemocracyCraft"], ["Reporting Standard", "Accounting Reform Act 2025"]].map(([k, v]) => (
+          {[
+            { k: "Company Name", v: "Green Bastards" },
+            { k: "DemocracyCraft Firm ID", v: "/firm GB" },
+            { k: "Licensed Accountant", v: "ILatteralus (IC)" },
+            { k: "Fiscal Period", v: "Monthly" },
+            { k: "Jurisdiction", v: "DemocracyCraft" },
+            { 
+              k: "Reporting Standard", 
+              v: (
+                <div style={{ textAlign: "right" }}>
+                  <a href="https://www.democracycraft.net/threads/accounting-reform-act.32101/" target="_blank" rel="noopener noreferrer" style={{ color: "#c8a820", textDecoration: "underline" }}>
+                    Accounting Reform Act 2025
+                  </a>
+                  <br />
+                  <a href="https://www.democracycraft.net/threads/taxation-act.4691/" target="_blank" rel="noopener noreferrer" style={{ color: "#c8a820", textDecoration: "underline" }}>
+                    Taxation Act
+                  </a>
+                </div>
+              )
+            }
+          ].map(({ k, v }) => (
             <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
               <span style={{ color: "#5a6a5a", fontSize: 12 }}>{k}</span>
               <span style={{ color: "#c8a820", fontSize: 12 }}>{v}</span>

@@ -3,7 +3,7 @@ create extension if not exists "uuid-ossp";
 
 -- 1. Create Accounts Table
 create table public.accounts (
-  id uuid default uuid_generate_v4() primary key,
+  id uuid default gen_random_uuid() primary key,
   username text unique not null,
   password text not null, -- Note: In a production app, use Supabase Auth or hash passwords!
   position text not null,
