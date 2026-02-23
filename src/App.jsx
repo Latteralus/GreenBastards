@@ -36,28 +36,33 @@ function buildChartData(transactions) {
   return data;
 }
 
-function calcSummary(transactions) {
+function calcSummary(transactions, categories) {
   const approved = transactions.filter(t => t.status === "Approved");
-  
-  // Total Cash Flow (Treasury Balance) - Includes everything
+
+  // Build category-type lookup from DB: { "Sales Revenue": "Revenue", ... }
+  const catType = {};
+  (categories || []).forEach(c => { catType[c.name] = c.type; });
+
+  // Treasury Balance — ALL approved transactions affect cash
   const totalCredits = approved.filter(t => t.type === "Credit").reduce((s, t) => s + t.amount, 0);
   const totalDebits = approved.filter(t => t.type === "Debit").reduce((s, t) => s + t.amount, 0);
   const balance = totalCredits - totalDebits;
 
-  // Operating Cash Flow (Revenue/Expenses) - Excludes Financing/Savings
-  // Excluded Categories: "Savings", "Loan Proceeds", "Loan Repayment", "Capital Contribution"
-  const excludedCats = ["Savings", "Loan Proceeds", "Loan Repayment", "Capital Contribution"];
-  
+  // Operating Revenue — Only Credits from type='Revenue' categories
+  // Excludes: Investment (Equity), Capital Contribution (Equity), Loan Proceeds (Liability), Savings (Asset)
   const revenue = approved
-    .filter(t => t.type === "Credit" && !excludedCats.includes(t.category))
+    .filter(t => t.type === "Credit" && catType[t.category] === "Revenue")
     .reduce((s, t) => s + t.amount, 0);
-    
+
+  // Operating Expenses — Only Debits from type='Expense' categories
+  // Excludes: Equipment (Asset), Savings (Asset), Loan Repayment (Liability)
+  // NOTE: COGS is type='Expense' and IS included here (recorded only when a sale occurs)
   const expenses = approved
-    .filter(t => t.type === "Debit" && !excludedCats.includes(t.category))
+    .filter(t => t.type === "Debit" && catType[t.category] === "Expense")
     .reduce((s, t) => s + t.amount, 0);
 
   const pending = transactions.filter(t => t.status === "Pending").length;
-  
+
   return { revenue, expenses, balance, pending };
 }
 
@@ -125,7 +130,9 @@ function LoginScreen({ onLogin, accounts }) {
     setTimeout(() => {
       const user = accounts.find(u => u.username === username && u.password === password);
       if (user) { 
-        onLogin({ ...user, role: user.position, displayName: user.username }); 
+        const userData = { ...user, role: user.position, displayName: user.username };
+        localStorage.setItem("user", JSON.stringify(userData));
+        onLogin(userData); 
       } else { 
         setError("Invalid credentials. Check username and password."); 
         setLoading(false); 
@@ -229,9 +236,9 @@ function StatCard({ label, value, sub, accent }) {
   );
 }
 
-function Dashboard({ transactions }) {
+function Dashboard({ transactions, categories }) {
   const chartData = buildChartData(transactions);
-  const { revenue, expenses, balance, pending } = calcSummary(transactions);
+  const { revenue, expenses, balance, pending } = calcSummary(transactions, categories);
   const savings = calcSavingsBalance(transactions);
   const loanLiability = calcLoanLiability(transactions);
 
@@ -329,10 +336,11 @@ function Transactions({ transactions, onTransactionUpdate, user, categories, loa
   }, [categories]);
 
   // Auto-switch transaction type based on category
+  // Investment & Capital Contribution are Equity (money IN, not Revenue)
   useEffect(() => {
-    if (form.category === "Loan Proceeds" || form.category === "Capital Contribution") {
+    if (["Loan Proceeds", "Capital Contribution", "Investment"].includes(form.category)) {
       setForm(f => ({ ...f, type: "Credit" }));
-    } else if (form.category === "Loan Repayment" || form.category === "Savings") {
+    } else if (["Loan Repayment", "Savings"].includes(form.category)) {
       setForm(f => ({ ...f, type: "Debit" }));
     }
   }, [form.category]);
@@ -515,7 +523,7 @@ function Transactions({ transactions, onTransactionUpdate, user, categories, loa
   );
 }
 
-function AuditCenter({ transactions, onTransactionUpdate, user }) {
+function AuditCenter({ transactions, onTransactionUpdate, user, categories }) {
   const pending = transactions.filter(t => t.status === "Pending");
 
   const updateStatus = async (id, status) => {
@@ -532,7 +540,7 @@ function AuditCenter({ transactions, onTransactionUpdate, user }) {
     }
   };
 
-  const { balance } = calcSummary(transactions); // This is Treasury Balance
+  const { balance } = calcSummary(transactions, categories); // This is Treasury Balance
   const pendingTotal = pending.reduce((s, t) => s + (t.type === "Credit" ? t.amount : -t.amount), 0);
 
   return (
@@ -747,15 +755,16 @@ function Loans({ transactions, loans }) {
   );
 }
 
-function Reports({ transactions, inventory }) {
-  const { revenue, expenses } = calcSummary(transactions);
+function Reports({ transactions, inventory, categories }) {
+  const { revenue, expenses } = calcSummary(transactions, categories);
   const netIncome = revenue - expenses;
   const savingsBalance = calcSavingsBalance(transactions);
   const loanLiability = calcLoanLiability(transactions);
 
-  // Calculate inventory value
+  // Calculate inventory value from inventory table (authoritative for on-hand stock)
   const inventoryValue = inventory.reduce((sum, item) => sum + (item.quantity * (parseFloat(item.est_value) || 0)), 0);
 
+  // Aggregate approved transactions by category
   const approved = transactions.filter(t => t.status === "Approved");
   const byCategory = {};
   approved.forEach(t => {
@@ -764,15 +773,35 @@ function Reports({ transactions, inventory }) {
     else byCategory[t.category].debits += t.amount;
   });
 
+  // Equipment is an Asset — NO depreciation applied (per policy)
   const equipmentValue = byCategory["Equipment"]?.debits || 0;
-  const capitalContributions = byCategory["Capital Contribution"]?.credits || 0;
 
-  const cogs = (byCategory["Hops"]?.debits || 0) + (byCategory["Malt"]?.debits || 0) + (byCategory["Barley"]?.debits || 0) + (byCategory["Yeast"]?.debits || 0);
-  // Removed unused operatingExpenses
+  // Founder Capital = Capital Contribution + Investment (both are Equity, not Revenue)
+  const founderCapital = (byCategory["Capital Contribution"]?.credits || 0) + (byCategory["Investment"]?.credits || 0);
+
+  // COGS — Only from explicit "COGS" category (accrual basis: recorded when sale occurs, NOT on purchase)
+  const cogs = byCategory["COGS"]?.debits || 0;
   const grossProfit = revenue - cogs;
+
+  // Operating Expenses (type='Expense' excluding COGS)
+  const opexPayroll = byCategory["Payroll"]?.debits || 0;
+  const opexRent = byCategory["Rent"]?.debits || 0;
+  const opexUtilities = byCategory["Utilities"]?.debits || 0;
+  const opexTax = byCategory["Tax"]?.debits || 0;
+  const opexMisc = byCategory["Miscellaneous"]?.debits || 0;
+  const totalOpex = opexPayroll + opexRent + opexUtilities + opexTax + opexMisc;
   
-  // Treasury Balance (Actual Cash)
-  const treasuryBalance = approved.filter(t => t.type === "Credit").reduce((s,t) => s+t.amount, 0) - approved.filter(t => t.type === "Debit").reduce((s,t) => s+t.amount, 0);
+  // Treasury Balance (Actual Cash — all approved credits minus all approved debits)
+  const treasuryBalance = approved.filter(t => t.type === "Credit").reduce((s, t) => s + t.amount, 0)
+    - approved.filter(t => t.type === "Debit").reduce((s, t) => s + t.amount, 0);
+
+  // ─── Balance Sheet Integrity Check ──────────────────────────────────────
+  const totalAssets = treasuryBalance + savingsBalance + inventoryValue + equipmentValue;
+  const totalLiabilities = loanLiability;
+  // Retained Earnings derived from Income Statement (NOT a plug)
+  const retainedEarnings = netIncome;
+  const totalEquity = founderCapital + retainedEarnings;
+  const isBalanced = Math.abs(totalAssets - totalLiabilities - totalEquity) < 0.01;
 
   const [active, setActive] = useState("income");
 
@@ -804,21 +833,32 @@ function Reports({ transactions, inventory }) {
               <div style={{ color: "#c8a820", fontSize: 18, fontWeight: "bold", letterSpacing: 2, textTransform: "uppercase" }}>Green Bastards Brewery</div>
               <div style={{ color: "#8a9a8a", fontSize: 13, marginTop: 4 }}>Income Statement · February 2026</div>
             </div>
+            <SectionHeader label="REVENUE" />
             <Row label="Sales Revenue" val={byCategory["Sales Revenue"]?.credits || 0} color="#50c860" />
             <Row label="Contract Revenue" val={byCategory["Contract Revenue"]?.credits || 0} color="#50c860" />
-            <Row label="Investment / Other Income" val={(byCategory["Investment"]?.credits || 0) + (byCategory["Miscellaneous"]?.credits || 0)} color="#50c860" />
+            <Row label="Miscellaneous Income" val={byCategory["Miscellaneous"]?.credits || 0} color="#50c860" />
             <TotalRow label="TOTAL REVENUE" val={revenue} color="#50c860" />
             <div style={{ height: 16 }} />
-            <Row label="Cost of Goods Sold (COGS)" val={-cogs} color="#e05050" sub="Hops, Malt, Barley, Yeast" />
+            <SectionHeader label="COST OF GOODS SOLD" />
+            <Row label="COGS" val={-cogs} color="#e05050" sub="Accrual basis — recorded when sale occurs" />
             <TotalRow label="GROSS PROFIT" val={grossProfit} color={grossProfit >= 0 ? "#50c860" : "#e05050"} />
             <div style={{ height: 16 }} />
-            <Row label="Payroll" val={-(byCategory["Payroll"]?.debits || 0)} color="#e05050" />
-            <Row label="Rent" val={-(byCategory["Rent"]?.debits || 0)} color="#e05050" />
-            <Row label="Utilities / Equipment" val={-((byCategory["Utilities"]?.debits || 0) + (byCategory["Equipment"]?.debits || 0))} color="#e05050" />
-            <Row label="Tax" val={-(byCategory["Tax"]?.debits || 0)} color="#e05050" />
-            <Row label="Miscellaneous Expenses" val={-(byCategory["Miscellaneous"]?.debits || 0)} color="#e05050" />
+            <SectionHeader label="OPERATING EXPENSES" />
+            <Row label="Payroll" val={-opexPayroll} color="#e05050" />
+            <Row label="Rent" val={-opexRent} color="#e05050" />
+            <Row label="Utilities" val={-opexUtilities} color="#e05050" />
+            <Row label="Tax" val={-opexTax} color="#e05050" />
+            <Row label="Miscellaneous Expenses" val={-opexMisc} color="#e05050" />
+            <TotalRow label="TOTAL OPERATING EXPENSES" val={totalOpex} color="#e05050" />
             <div style={{ height: 8 }} />
             <TotalRow label="NET INCOME" val={netIncome} color={netIncome >= 0 ? "#c8a820" : "#e05050"} large />
+            <div style={{ marginTop: 16, padding: "10px 14px", background: "rgba(180,140,20,0.06)", border: "1px dashed rgba(180,140,20,0.2)", borderRadius: 3 }}>
+              <div style={{ color: "#5a6a5a", fontSize: 11 }}>
+                Note: Investment and Capital Contributions are classified as Owner's Equity, not Revenue.
+                Raw material purchases are recorded as Inventory Assets. Equipment is capitalized with no depreciation.
+                COGS is recognized only when a sale occurs (accrual basis).
+              </div>
+            </div>
           </div>
         )}
 
@@ -826,23 +866,38 @@ function Reports({ transactions, inventory }) {
           <div style={{ maxWidth: 600 }}>
             <div style={{ textAlign: "center", marginBottom: 32, borderBottom: "1px solid rgba(180,140,20,0.2)", paddingBottom: 20 }}>
               <div style={{ color: "#c8a820", fontSize: 18, fontWeight: "bold", letterSpacing: 2, textTransform: "uppercase" }}>Green Bastards Brewery</div>
-              <div style={{ color: "#8a9a8a", fontSize: 13, marginTop: 4 }}>Balance Sheet · February 22, 2026</div>
+              <div style={{ color: "#8a9a8a", fontSize: 13, marginTop: 4 }}>Balance Sheet · February 2026</div>
             </div>
             <SectionHeader label="ASSETS" />
             <Row label="Cash (Treasury)" val={treasuryBalance} color="#50c860" />
             <Row label="Savings Account" val={savingsBalance} color="#3498db" />
-            <Row label="Inventory (est. market value)" val={inventoryValue} color="#50c860" sub="Finished goods on hand" />
-            <Row label="Equipment & Fixtures" val={equipmentValue} color="#50c860" sub="Brewing stands, barrels (est.)" />
-            <TotalRow label="TOTAL ASSETS" val={treasuryBalance + savingsBalance + inventoryValue + equipmentValue} color="#50c860" />
+            <Row label="Inventory (est. market value)" val={inventoryValue} color="#50c860" sub="Raw materials & finished goods on hand" />
+            <Row label="Equipment & Fixtures" val={equipmentValue} color="#50c860" sub="No depreciation applied (per policy)" />
+            <TotalRow label="TOTAL ASSETS" val={totalAssets} color="#50c860" />
             <div style={{ height: 20 }} />
             <SectionHeader label="LIABILITIES" />
             <Row label="Loans Payable" val={loanLiability} color="#e05050" sub="Outstanding principal" />
-            <TotalRow label="TOTAL LIABILITIES" val={loanLiability} color="#e05050" />
+            <TotalRow label="TOTAL LIABILITIES" val={totalLiabilities} color="#e05050" />
             <div style={{ height: 20 }} />
             <SectionHeader label="OWNER'S EQUITY" />
-            <Row label="Founder Capital" val={capitalContributions} color="#c8a820" />
-            <Row label="Retained Earnings" val={(treasuryBalance + savingsBalance + inventoryValue + equipmentValue) - loanLiability - capitalContributions} color="#c8a820" sub="(Accumulated Profit)" />
-            <TotalRow label="TOTAL EQUITY" val={(treasuryBalance + savingsBalance + inventoryValue + equipmentValue) - loanLiability} color="#c8a820" large />
+            <Row label="Founder Capital" val={founderCapital} color="#c8a820" sub="Capital Contribution + Investment" />
+            <Row label="Retained Earnings" val={retainedEarnings} color="#c8a820" sub="Derived from Net Income" />
+            <TotalRow label="TOTAL EQUITY" val={totalEquity} color="#c8a820" />
+            <div style={{ height: 16 }} />
+            <TotalRow label="LIABILITIES + EQUITY" val={totalLiabilities + totalEquity} color="#c8a820" large />
+
+            {/* Balance Sheet Integrity Check */}
+            <div style={{ marginTop: 16, padding: "12px 16px", background: isBalanced ? "rgba(40,120,50,0.08)" : "rgba(180,50,50,0.12)", border: `1px solid ${isBalanced ? "rgba(40,120,50,0.3)" : "rgba(180,50,50,0.4)"}`, borderRadius: 4, display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 18 }}>{isBalanced ? "✓" : "✗"}</span>
+              <div>
+                <div style={{ color: isBalanced ? "#50c860" : "#e05050", fontSize: 13, fontWeight: "bold" }}>
+                  {isBalanced ? "Balance Sheet Integrity: VERIFIED" : "Balance Sheet Integrity: OUT OF BALANCE"}
+                </div>
+                <div style={{ color: "#5a6a5a", fontSize: 11 }}>
+                  Assets ({fmt(totalAssets)}) {isBalanced ? "=" : "≠"} Liabilities ({fmt(totalLiabilities)}) + Equity ({fmt(totalEquity)})
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -853,10 +908,10 @@ function Reports({ transactions, inventory }) {
               <div style={{ color: "#8a9a8a", fontSize: 13, marginTop: 4 }}>Statement of Owner's Equity · February 2026</div>
             </div>
             <Row label="Beginning Equity" val={0} color="#c8a820" />
-            <Row label="Capital Contributions" val={capitalContributions} color="#50c860" />
+            <Row label="Capital Contributions" val={founderCapital} color="#50c860" sub="Capital Contribution + Investment" />
             <Row label="Net Income This Period" val={netIncome} color={netIncome >= 0 ? "#50c860" : "#e05050"} />
             <Row label="Owner Withdrawals" val={0} color="#e05050" />
-            <TotalRow label="ENDING OWNER'S EQUITY" val={capitalContributions + netIncome} color="#c8a820" large />
+            <TotalRow label="ENDING OWNER'S EQUITY" val={founderCapital + netIncome} color="#c8a820" large />
           </div>
         )}
 
@@ -869,14 +924,23 @@ function Reports({ transactions, inventory }) {
             <MDASection title="Business Overview">
               Green Bastards Brewery is a startup brewing company operating within the DemocracyCraft jurisdiction, licensed under the Department of Commerce. The company produces and distributes brewed beverages via chest shop retail and government supply contracts. This report covers our first full operating month.
             </MDASection>
+            <MDASection title="Capital Structure">
+              The company was funded through {fmt(founderCapital)} in founder capital contributions and investment. These inflows are classified as Owner's Equity on the Balance Sheet — they are not earned revenue and do not appear on the Income Statement. Outstanding loan liabilities total {fmt(loanLiability)}, with repayment tracked on a per-loan basis.
+            </MDASection>
             <MDASection title="Revenue Performance">
-              Total revenue for February 2026 reached {fmt(revenue)}, driven by chest shop sales ({fmt(byCategory["Sales Revenue"]?.credits || 0)}) and the Mayor's Gala supply contract ({fmt(byCategory["Contract Revenue"]?.credits || 0)}). The Gala contract represents a significant one-time revenue event that meaningfully accelerated our launch trajectory.
+              Total operating revenue for February 2026 reached {fmt(revenue)}, composed of chest shop sales ({fmt(byCategory["Sales Revenue"]?.credits || 0)}) and contract revenue ({fmt(byCategory["Contract Revenue"]?.credits || 0)}). Revenue is recognized only from earned income — sales of goods and services.
+            </MDASection>
+            <MDASection title="Cost Management & Inventory Policy">
+              The company follows accrual-based inventory accounting. Purchases of raw materials are capitalized as Inventory Assets on the Balance Sheet and are not expensed until a sale occurs. Cost of Goods Sold (COGS) for this period was {fmt(cogs)}. Current inventory on hand is valued at {fmt(inventoryValue)}. Equipment totaling {fmt(equipmentValue)} has been capitalized with no depreciation applied per company policy.
             </MDASection>
             <MDASection title="Expense Analysis">
-              Cost of Goods Sold totaled {fmt(cogs)}, yielding a gross margin of {revenue > 0 ? ((grossProfit / revenue) * 100).toFixed(1) : "0"}%. Payroll was our largest operating expense at {fmt(byCategory["Payroll"]?.debits || 0)}, reflecting the accelerated production schedule required for the Gala contract.
+              Total operating expenses reached {fmt(totalOpex)}. Payroll ({fmt(opexPayroll)}) was the largest component, followed by rent ({fmt(opexRent)}), utilities ({fmt(opexUtilities)}), and taxes ({fmt(opexTax)}). Net Income for the period was {fmt(netIncome)}.
+            </MDASection>
+            <MDASection title="Balance Sheet Health">
+              Total assets stand at {fmt(totalAssets)}, comprising cash ({fmt(treasuryBalance)}), savings ({fmt(savingsBalance)}), inventory ({fmt(inventoryValue)}), and equipment ({fmt(equipmentValue)}). The Balance Sheet equation (Assets = Liabilities + Equity) {isBalanced ? "is verified and in balance" : "shows a discrepancy requiring investigation"}.
             </MDASection>
             <MDASection title="Compliance & Tax">
-              Weekly wealth taxes totaling {fmt(byCategory["Tax"]?.debits || 0)} were remitted to the government per the DemocracyCraft Taxation Act. The company remains in good standing. All transactions have been reviewed and certified by the licensed IC Accountant.
+              Weekly wealth taxes totaling {fmt(opexTax)} were remitted to the government per the DemocracyCraft Taxation Act. The company remains in good standing. All transactions have been reviewed and certified by the licensed IC Accountant.
             </MDASection>
             <MDASection title="Outlook">
               With foundational chest shop infrastructure in place and an initial contract secured, the company is positioned to pursue consistent retail revenue in March. Management is evaluating a bot-integrated API dashboard to automate transaction imports from the /db plugin.
@@ -1232,7 +1296,15 @@ function Settings({ user, categories, onDataUpdate }) {
 
 // ─── APP ROOT ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem("user");
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      console.error("Failed to parse user from localStorage", e);
+      return null;
+    }
+  });
   const [active, setActive] = useState("dashboard");
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -1294,14 +1366,18 @@ export default function App() {
 
   return (
     <div style={{ background: "#0a0714", minHeight: "100vh" }}>
-      <Sidebar active={active} setActive={setActive} user={user} onLogout={() => { setUser(null); setActive("dashboard"); }} pendingCount={pendingCount} />
+      <Sidebar active={active} setActive={setActive} user={user} onLogout={() => { 
+        localStorage.removeItem("user");
+        setUser(null); 
+        setActive("dashboard"); 
+      }} pendingCount={pendingCount} />
       <div style={pageStyle}>
-        {active === "dashboard" && <Dashboard transactions={transactions} />}
+        {active === "dashboard" && <Dashboard transactions={transactions} categories={categories} />}
         {active === "transactions" && <Transactions transactions={transactions} onTransactionUpdate={handleTransactionUpdate} user={user} categories={categories} loans={loans} />}
         {active === "inventory" && <Inventory inventory={inventory} onInventoryUpdate={handleTransactionUpdate} />}
         {active === "loans" && <Loans transactions={transactions} loans={loans} />}
-        {active === "audit" && user.role === "CFO" && <AuditCenter transactions={transactions} onTransactionUpdate={handleTransactionUpdate} user={user} />}
-        {active === "reports" && <Reports transactions={transactions} inventory={inventory} />}
+        {active === "audit" && user.role === "CFO" && <AuditCenter transactions={transactions} onTransactionUpdate={handleTransactionUpdate} user={user} categories={categories} />}
+        {active === "reports" && <Reports transactions={transactions} inventory={inventory} categories={categories} />}
         {active === "settings" && <Settings user={user} categories={categories} onDataUpdate={handleTransactionUpdate} />}
       </div>
     </div>
