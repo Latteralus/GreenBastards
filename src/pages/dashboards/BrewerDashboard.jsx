@@ -154,8 +154,8 @@ export default function BrewerDashboard({ user, onLogout }) {
   // ─── Nav Items ────────────────────────────────────────────────────────────────
 
   const navItems = [
-    { id: "myorders", label: "My Orders", icon: "📋", badge: assignedOrders.length > 0 ? assignedOrders.length : null },
-    { id: "queue", label: "Production Queue", icon: "⚗" },
+    { id: "myorders", label: "My Orders", icon: "▢", badge: assignedOrders.length > 0 ? assignedOrders.length : null },
+    { id: "queue", label: "Production Queue", icon: "◱" },
   ];
 
   const pageStyle = {

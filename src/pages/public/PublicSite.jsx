@@ -518,75 +518,126 @@ export default function PublicSite() {
                 </div>
               ) : (
                 <>
-                  {/* Header row */}
-                  <div style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr auto auto auto",
-                    gap: 16, padding: "12px 0",
-                    borderBottom: `1px solid ${C.border}`,
-                    color: C.textMuted, fontSize: 12,
-                    textTransform: "uppercase", letterSpacing: 1,
-                  }}>
-                    <span>Product</span>
-                    <span style={{ textAlign: "right", minWidth: 80 }}>Price</span>
-                    <span style={{ textAlign: "center", minWidth: 70 }}>Qty</span>
-                    <span style={{ textAlign: "right", minWidth: 90 }}>Subtotal</span>
+                  <div style={{ marginBottom: 24, display: "flex", gap: 16, alignItems: "flex-end", flexWrap: "wrap" }}>
+                    <div style={{ flex: "1 1 min-content" }}>
+                      <label style={{ color: C.textSec, fontSize: 12, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 6 }}>
+                        Select Product to Add
+                      </label>
+                      <select
+                        id="product-select"
+                        style={{ ...inputStyle, cursor: "pointer", height: "42px" }}
+                        defaultValue=""
+                      >
+                        <option value="" disabled>-- Choose a Product --</option>
+                        {inStockProducts.map(p => (
+                          <option key={p.id} value={p.id}>{p.name} - {fmt(p.price)}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const sel = document.getElementById("product-select");
+                        if (sel.value) {
+                          setQty(sel.value, (quantities[sel.value] || 0) + 1);
+                          sel.value = "";
+                        }
+                      }}
+                      style={{ ...btnOutline, padding: "10px 20px", height: "42px", whiteSpace: "nowrap" }}
+                      onMouseEnter={(e) => { e.target.style.background = C.gold; e.target.style.color = C.bg; }}
+                      onMouseLeave={(e) => { e.target.style.background = "transparent"; e.target.style.color = C.gold; }}
+                    >
+                      Add to Order
+                    </button>
                   </div>
 
-                  {/* Product rows */}
-                  {inStockProducts.map((p) => {
-                    const qty = quantities[p.id] || 0;
-                    const sub = qty * p.price;
-                    return (
-                      <div key={p.id} style={{
+                  {Object.keys(quantities).filter(id => quantities[id] > 0).length > 0 && (
+                    <>
+                      {/* Header row */}
+                      <div style={{
                         display: "grid",
-                        gridTemplateColumns: "1fr auto auto auto",
-                        gap: 16, padding: "14px 0",
+                        gridTemplateColumns: "1fr auto auto auto auto",
+                        gap: 16, padding: "12px 0",
                         borderBottom: `1px solid ${C.border}`,
-                        alignItems: "center",
+                        color: C.textMuted, fontSize: 12,
+                        textTransform: "uppercase", letterSpacing: 1,
                       }}>
-                        <span style={{ color: C.text, fontSize: 15 }}>{p.name}</span>
-                        <span style={{ color: C.textSec, fontSize: 14, textAlign: "right", minWidth: 80 }}>
-                          {fmt(p.price)}
+                        <span>Product</span>
+                        <span style={{ textAlign: "right", minWidth: 80 }}>Price</span>
+                        <span style={{ textAlign: "center", minWidth: 70 }}>Qty</span>
+                        <span style={{ textAlign: "right", minWidth: 90 }}>Subtotal</span>
+                        <span style={{ textAlign: "center", minWidth: 40 }}></span>
+                      </div>
+
+                      {/* Product rows */}
+                      {Object.keys(quantities).filter(id => quantities[id] > 0).map((id) => {
+                        const p = inStockProducts.find(prod => prod.id === id);
+                        if (!p) return null;
+                        const qty = quantities[p.id];
+                        const sub = qty * p.price;
+                        return (
+                          <div key={p.id} style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr auto auto auto auto",
+                            gap: 16, padding: "14px 0",
+                            borderBottom: `1px solid ${C.border}`,
+                            alignItems: "center",
+                          }}>
+                            <span style={{ color: C.text, fontSize: 15 }}>{p.name}</span>
+                            <span style={{ color: C.textSec, fontSize: 14, textAlign: "right", minWidth: 80 }}>
+                              {fmt(p.price)}
+                            </span>
+                            <span style={{ textAlign: "center", minWidth: 70 }}>
+                              <input
+                                type="number"
+                                min="1"
+                                value={qty}
+                                onChange={(e) => setQty(p.id, e.target.value)}
+                                style={{
+                                  ...inputStyle,
+                                  width: 60,
+                                  textAlign: "center",
+                                  padding: "6px 4px",
+                                }}
+                              />
+                            </span>
+                            <span style={{
+                              color: C.gold,
+                              fontSize: 15, fontWeight: "bold",
+                              textAlign: "right", minWidth: 90,
+                            }}>
+                              {fmt(sub)}
+                            </span>
+                            <span style={{ textAlign: "center", minWidth: 40 }}>
+                                <button
+                                  onClick={() => setQty(p.id, 0)}
+                                  style={{
+                                    background: "none", border: "none", color: C.red,
+                                    cursor: "pointer", fontSize: 24, padding: "0 8px", lineHeight: 1
+                                  }}
+                                  title="Remove item"
+                                >
+                                  ×
+                                </button>
+                            </span>
+                          </div>
+                        );
+                      })}
+
+                      {/* Running total */}
+                      <div style={{
+                        display: "flex", justifyContent: "flex-end", alignItems: "center",
+                        padding: "20px 0", gap: 16,
+                        borderBottom: `2px solid ${C.borderEm}`,
+                      }}>
+                        <span style={{ color: C.textSec, fontSize: 14, textTransform: "uppercase", letterSpacing: 1 }}>
+                          Total:
                         </span>
-                        <span style={{ textAlign: "center", minWidth: 70 }}>
-                          <input
-                            type="number"
-                            min="0"
-                            value={qty}
-                            onChange={(e) => setQty(p.id, e.target.value)}
-                            style={{
-                              ...inputStyle,
-                              width: 60,
-                              textAlign: "center",
-                              padding: "6px 4px",
-                            }}
-                          />
-                        </span>
-                        <span style={{
-                          color: sub > 0 ? C.gold : C.textVMuted,
-                          fontSize: 15, fontWeight: sub > 0 ? "bold" : "normal",
-                          textAlign: "right", minWidth: 90,
-                        }}>
-                          {fmt(sub)}
+                        <span style={{ color: C.gold, fontSize: 24, fontWeight: "bold" }}>
+                          {fmt(orderTotal)}
                         </span>
                       </div>
-                    );
-                  })}
-
-                  {/* Running total */}
-                  <div style={{
-                    display: "flex", justifyContent: "flex-end", alignItems: "center",
-                    padding: "20px 0", gap: 16,
-                    borderBottom: `2px solid ${C.borderEm}`,
-                  }}>
-                    <span style={{ color: C.textSec, fontSize: 14, textTransform: "uppercase", letterSpacing: 1 }}>
-                      Total:
-                    </span>
-                    <span style={{ color: C.gold, fontSize: 24, fontWeight: "bold" }}>
-                      {fmt(orderTotal)}
-                    </span>
-                  </div>
+                    </>
+                  )}
                 </>
               )}
 
@@ -626,48 +677,6 @@ export default function PublicSite() {
                       />
                     </div>
                   </div>
-
-                  {/* Delivery Method */}
-                  <div style={{ marginBottom: 20 }}>
-                    <label style={{ color: C.textSec, fontSize: 12, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 10 }}>
-                      Delivery Method
-                    </label>
-                    <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
-                      {["Pickup", "Delivery"].map((method) => (
-                        <label key={method} style={{
-                          display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
-                          color: deliveryMethod === method ? C.gold : C.textSec,
-                          transition: "color 0.2s",
-                        }}>
-                          <input
-                            type="radio"
-                            name="deliveryMethod"
-                            value={method}
-                            checked={deliveryMethod === method}
-                            onChange={(e) => setDeliveryMethod(e.target.value)}
-                            style={{ accentColor: C.gold }}
-                          />
-                          <span style={{ fontSize: 14 }}>{method}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Delivery Location - conditional */}
-                  {deliveryMethod === "Delivery" && (
-                    <div style={{ marginBottom: 20 }}>
-                      <label style={{ color: C.textSec, fontSize: 12, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 6 }}>
-                        Delivery Location
-                      </label>
-                      <input
-                        type="text"
-                        value={deliveryLocation}
-                        onChange={(e) => setDeliveryLocation(e.target.value)}
-                        placeholder="In-game address or coordinates"
-                        style={inputStyle}
-                      />
-                    </div>
-                  )}
 
                   {/* Notes */}
                   <div style={{ marginBottom: 32 }}>
