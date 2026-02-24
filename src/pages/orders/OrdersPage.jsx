@@ -1312,12 +1312,12 @@ export default function OrdersPage({ showFinancial = false, onCreateTransaction 
             >
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 <div>
-                  <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>IC Name</label>
-                  <input required value={addForm.customer_ic_name} onChange={e => setAddForm({...addForm, customer_ic_name: e.target.value})} style={inputStyle} />
+                  <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>IC Name <span style={{ color: "#e05050" }}>*</span></label>
+                  <input required value={addForm.customer_ic_name} onChange={e => setAddForm({...addForm, customer_ic_name: e.target.value})} placeholder="In-game Name" style={inputStyle} />
                 </div>
                 <div>
-                  <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Discord Username</label>
-                  <input value={addForm.customer_discord} onChange={e => setAddForm({...addForm, customer_discord: e.target.value})} style={inputStyle} />
+                  <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Discord Username (Optional)</label>
+                  <input value={addForm.customer_discord} onChange={e => setAddForm({...addForm, customer_discord: e.target.value})} placeholder="Optional" style={inputStyle} />
                 </div>
                 <div>
                   <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Delivery Method</label>
@@ -1341,8 +1341,8 @@ export default function OrdersPage({ showFinancial = false, onCreateTransaction 
               </div>
 
               <div>
-                <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Notes</label>
-                <textarea value={addForm.notes} onChange={e => setAddForm({...addForm, notes: e.target.value})} style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} />
+                <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Notes (Optional)</label>
+                <textarea value={addForm.notes} onChange={e => setAddForm({...addForm, notes: e.target.value})} placeholder="Any special requests or details..." style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} />
               </div>
 
               <div style={{ borderTop: "1px solid rgba(180,140,20,0.15)", paddingTop: 16 }}>
