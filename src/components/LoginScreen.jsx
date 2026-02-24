@@ -15,6 +15,11 @@ export default function LoginScreen({ onLogin, accounts }) {
     setTimeout(() => {
       const user = accounts.find(u => u.username === username && u.password === password);
       if (user) { 
+        if (user.status === 'Terminated') {
+          setError("This account has been deactivated. Contact your manager.");
+          setLoading(false);
+          return;
+        }
         const userData = { ...user, role: user.position, displayName: user.username };
         localStorage.setItem("user", JSON.stringify(userData));
         onLogin(userData); 

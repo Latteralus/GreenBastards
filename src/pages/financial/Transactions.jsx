@@ -2,8 +2,10 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../supabaseClient.js";
 import { fmt } from "../../helpers.js";
 
-export default function Transactions({ transactions, onTransactionUpdate, user, categories, loans }) {
+export default function Transactions({ transactions, onTransactionUpdate, user, categories, loans, accounts = [] }) {
   const categoryNames = categories.map(c => c.name);
+  const activeEmployees = accounts.filter(a => a.status !== "Terminated");
+  
   const [form, setForm] = useState({ 
     date: new Date().toISOString().slice(0, 10), 
     type: "Debit", 
@@ -13,7 +15,11 @@ export default function Transactions({ transactions, onTransactionUpdate, user, 
     loan_id: "",
     newLoanName: "",
     newLoanLender: "",
-    newLoanRate: ""
+    newLoanRate: "",
+    employee_id: "",
+    pay_period_start: new Date().toISOString().slice(0, 10),
+    pay_period_end: new Date().toISOString().slice(0, 10),
+    hours_worked: ""
   });
   const [filter, setFilter] = useState("All");
   const [submitted, setSubmitted] = useState(false);
@@ -33,14 +39,32 @@ export default function Transactions({ transactions, onTransactionUpdate, user, 
   }, [categories]);
 
   // Auto-switch transaction type based on category
-  // Investment & Capital Contribution are Equity (money IN, not Revenue)
   useEffect(() => {
     if (["Loan Proceeds", "Capital Contribution", "Investment"].includes(form.category)) {
       setForm(f => ({ ...f, type: "Credit" }));
-    } else if (["Loan Repayment", "Savings"].includes(form.category)) {
+    } else if (["Loan Repayment", "Savings", "Payroll"].includes(form.category)) {
       setForm(f => ({ ...f, type: "Debit" }));
     }
   }, [form.category]);
+
+  // Payroll auto-calculations
+  useEffect(() => {
+    if (form.category === "Payroll" && form.employee_id) {
+      const emp = activeEmployees.find(e => e.id === form.employee_id);
+      if (emp) {
+        let amt = form.amount;
+        if (emp.wage_type === "Hourly" && form.hours_worked) {
+          amt = (parseFloat(emp.wage) * parseFloat(form.hours_worked)).toFixed(2);
+        } else if (emp.wage_type !== "Hourly") {
+          amt = parseFloat(emp.wage).toFixed(2);
+        }
+        
+        const memo = `Payroll — ${emp.full_name || emp.username} (${emp.ic_name || "N/A"}) — ${form.pay_period_start} to ${form.pay_period_end}`;
+        
+        setForm(f => ({ ...f, amount: amt, memo }));
+      }
+    }
+  }, [form.category, form.employee_id, form.hours_worked, form.pay_period_start, form.pay_period_end]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -68,7 +92,7 @@ export default function Transactions({ transactions, onTransactionUpdate, user, 
           name: form.newLoanName,
           lender: form.newLoanLender,
           interest_rate: parseFloat(form.newLoanRate) || 0,
-          principal_amount: parseFloat(form.amount) || 0 // Set principal to the initial loan amount
+          principal_amount: parseFloat(form.amount) || 0
         }])
         .select()
         .single();
@@ -95,13 +119,31 @@ export default function Transactions({ transactions, onTransactionUpdate, user, 
       loan_id: (form.category === "Loan Proceeds" || form.category === "Loan Repayment") ? finalLoanId : null
     };
 
-    const { error } = await supabase.from('transactions').insert([newT]);
+    const { data: txData, error: txError } = await supabase.from('transactions').insert([newT]).select().single();
 
-    if (error) {
-      console.error('Error inserting transaction:', error);
+    if (txError) {
+      console.error('Error inserting transaction:', txError);
       alert('Failed to submit transaction');
     } else {
-      onTransactionUpdate(); // Refresh parent data
+      // Auto-insert paystub if payroll
+      if (form.category === "Payroll" && form.employee_id) {
+        const emp = activeEmployees.find(e => e.id === form.employee_id);
+        if (emp) {
+          const { error: stubError } = await supabase.from('paystubs').insert([{
+            account_id: emp.id,
+            transaction_id: txData.id,
+            pay_period_start: form.pay_period_start,
+            pay_period_end: form.pay_period_end,
+            hours_worked: emp.wage_type === "Hourly" ? (parseFloat(form.hours_worked) || null) : null,
+            hourly_rate: parseFloat(emp.wage) || null,
+            gross_pay: parseFloat(form.amount),
+            notes: "Auto-generated from payroll transaction"
+          }]);
+          if (stubError) console.error("Error creating paystub:", stubError);
+        }
+      }
+
+      onTransactionUpdate();
       setForm({ 
         date: new Date().toISOString().slice(0, 10), 
         type: "Debit", 
@@ -111,7 +153,11 @@ export default function Transactions({ transactions, onTransactionUpdate, user, 
         loan_id: "",
         newLoanName: "",
         newLoanLender: "",
-        newLoanRate: ""
+        newLoanRate: "",
+        employee_id: "",
+        pay_period_start: new Date().toISOString().slice(0, 10),
+        pay_period_end: new Date().toISOString().slice(0, 10),
+        hours_worked: ""
       });
       setSubmitted(true);
       setTimeout(() => setSubmitted(false), 3000);
@@ -151,6 +197,45 @@ export default function Transactions({ transactions, onTransactionUpdate, user, 
               </select>
             </div>
             
+            {form.category === "Payroll" && (
+              <div style={{ marginBottom: 14, padding: "12px", background: "rgba(180,140,20,0.05)", borderRadius: 3, border: "1px solid rgba(180,140,20,0.2)" }}>
+                <div style={{ color: "#c8a820", fontSize: 11, fontWeight: "bold", marginBottom: 12, textTransform: "uppercase" }}>Payroll Details</div>
+                
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ display: "block", color: "#8a9a8a", fontSize: 10, textTransform: "uppercase", marginBottom: 4 }}>Select Employee</label>
+                  <select value={form.employee_id} onChange={e => setForm(f => ({ ...f, employee_id: e.target.value }))} style={inputStyle}>
+                    <option value="">-- Select Employee --</option>
+                    {activeEmployees.map(emp => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.full_name || emp.username} — {emp.position} — ${emp.wage} / {emp.wage_type}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {form.employee_id && (
+                  <>
+                    <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: "block", color: "#8a9a8a", fontSize: 10, textTransform: "uppercase", marginBottom: 4 }}>Period Start</label>
+                        <input type="date" value={form.pay_period_start} onChange={e => setForm(f => ({ ...f, pay_period_start: e.target.value }))} style={inputStyle} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: "block", color: "#8a9a8a", fontSize: 10, textTransform: "uppercase", marginBottom: 4 }}>Period End</label>
+                        <input type="date" value={form.pay_period_end} onChange={e => setForm(f => ({ ...f, pay_period_end: e.target.value }))} style={inputStyle} />
+                      </div>
+                    </div>
+                    {activeEmployees.find(e => e.id === form.employee_id)?.wage_type === "Hourly" && (
+                      <div style={{ marginBottom: 10 }}>
+                        <label style={{ display: "block", color: "#8a9a8a", fontSize: 10, textTransform: "uppercase", marginBottom: 4 }}>Hours Worked</label>
+                        <input type="number" step="0.01" value={form.hours_worked} onChange={e => setForm(f => ({ ...f, hours_worked: e.target.value }))} style={inputStyle} placeholder="0.00" />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             {(form.category === "Loan Proceeds" || form.category === "Loan Repayment") && (
               <div style={{ marginBottom: 14 }}>
                 <label style={{ display: "block", color: "#5a6a5a", fontSize: 11, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Select Loan</label>

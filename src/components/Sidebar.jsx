@@ -1,11 +1,50 @@
-export default function Sidebar({ navItems, active, setActive, user, onLogout, pendingCount }) {
+export default function Sidebar({ active, setActive, user, onLogout, pendingCount }) {
   const roleColor = {
     'CFO': '#c8a820',
     'CEO': '#50c860',
+    'Manager': '#1a4a7a',
     'Brewer': '#3498db'
   };
 
   const role = user.role || user.position;
+
+  let navItems = [];
+
+  if (role === 'Brewer') {
+    navItems = [
+      { id: "myorders", label: "My Orders", icon: "▢" },
+      { id: "queue", label: "Production Queue", icon: "◱" },
+      { id: "recipes", label: "Recipe Book", icon: "📖" },
+      { id: "profile", label: "My Profile", icon: "👤" }
+    ];
+  } else if (role === 'Manager' || role === 'CEO') {
+    navItems = [
+      { id: "orders", label: "All Orders", icon: "▢" },
+      { id: "queue", label: "Production Queue", icon: "◱" },
+      { id: "forecasting", label: "Forecasting", icon: "◒" },
+      { id: "recipes", label: "Recipe Book", icon: "📖" },
+      { id: "employees", label: "Employees", icon: "👥" },
+      { id: "products", label: "Products & Recipes", icon: "⬡" },
+      { id: "profile", label: "My Profile", icon: "👤" }
+    ];
+  } else if (role === 'CFO') {
+    navItems = [
+      { id: "_sep1", label: "Finance", icon: "", separator: true },
+      { id: "dashboard", label: "Dashboard", icon: "◈" },
+      { id: "transactions", label: "Transactions", icon: "⟳" },
+      { id: "audit", label: "Audit Center", icon: "◎", badge: pendingCount > 0 ? pendingCount : null },
+      { id: "reports", label: "Reports", icon: "▤" },
+      { id: "_sep2", label: "Operations", icon: "", separator: true },
+      { id: "orders", label: "All Orders", icon: "▢" },
+      { id: "queue", label: "Production Queue", icon: "◱" },
+      { id: "forecasting", label: "Forecasting", icon: "◒" },
+      { id: "recipes", label: "Recipe Book", icon: "📖" },
+      { id: "employees", label: "Employees", icon: "👥" },
+      { id: "products", label: "Products & Recipes", icon: "⬡" },
+      { id: "settings", label: "Settings", icon: "⚙" },
+      { id: "profile", label: "My Profile", icon: "👤" }
+    ];
+  }
 
   return (
     <div style={{ width: 220, minHeight: "100vh", background: "rgba(8,5,18,0.98)", borderRight: "1px solid rgba(180,140,20,0.15)", display: "flex", flexDirection: "column", position: "fixed", left: 0, top: 0, bottom: 0, zIndex: 100 }}>
@@ -19,9 +58,8 @@ export default function Sidebar({ navItems, active, setActive, user, onLogout, p
         </div>
       </div>
 
-      <nav style={{ flex: 1, padding: "16px 0" }}>
+      <nav style={{ flex: 1, padding: "16px 0", overflowY: "auto" }}>
         {navItems.map((item, idx) => {
-          // Render separator items as section headers
           if (item.separator) {
             return (
               <div key={item.id || `sep-${idx}`} style={{ padding: "16px 20px 6px", marginTop: idx > 0 ? 8 : 0 }}>
@@ -35,7 +73,8 @@ export default function Sidebar({ navItems, active, setActive, user, onLogout, p
           }
 
           const isActive = active === item.id;
-          const badgeValue = item.id === "audit" && pendingCount > 0 ? pendingCount : item.badge;
+          const badgeValue = item.badge;
+          
           return (
             <button key={item.id} onClick={() => setActive(item.id)}
               style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "11px 20px", background: isActive ? "rgba(180,140,20,0.12)" : "transparent", border: "none", borderLeft: isActive ? "2px solid #c8a820" : "2px solid transparent", color: isActive ? "#c8a820" : "#5a6a5a", cursor: "pointer", fontSize: 13, textAlign: "left", transition: "all 0.15s", fontFamily: "Georgia, serif" }}>
