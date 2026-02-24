@@ -55,6 +55,54 @@ export default function EmployeesPage({ user, onViewProfile }) {
     password: "",
     contract_text: ""
   });
+  const [userEditedContract, setUserEditedContract] = useState(false);
+
+  const generateContract = (f) => {
+    // Format date as MM/DD/YYYY
+    const d = new Date();
+    const today = `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
+    const name = f.ic_name || "[Auto fill in employee name]";
+    const role = f.position || "[Auto Fill In]";
+    const wageStr = f.wage ? `$${f.wage}` : "[Fill in Auto based on form]";
+    const wageTypeStr = f.wage_type || "[Fill in based on form]";
+
+    return `This Agreement is entered into on ${today} between Green Bastards (the "Employer") and ${name} (the "Employee").
+
+1. POSITION AND DUTIES
+The Employee is hired in the role of ${role}. Duties include, but are not limited to, the production of quality goods, inventory management, and maintaining the cleanliness of the facilities. The Employee agrees to perform these duties to the best of their ability and in accordance with company standards.
+
+2. COMPENSATION
+Wage: ${wageStr}
+
+Wage Type: ${wageTypeStr}
+
+Payment Schedule: Payments will be processed based on daily salary and/or completed orders verified via the company portal.
+
+3. CODE OF CONDUCT
+As a member of Green Bastards, the Employee represents the brand at all times.
+
+Loyalty: Employee shall not engage in activities that conflict with the interests of the Green Bastards.
+
+Professionalism: High standards of conduct are expected when interacting with clients and fellow "Bastards."
+
+Confidentiality: Any proprietary recipes, trade secrets, or internal business must remain strictly confidential.
+
+4. TERMINATION
+This is an "at-will" agreement. Either party may terminate employment at any time. Green Bastards reserve the right to immediate termination.
+
+5. ACKNOWLEDGMENT
+By accepting this contract, the Employee acknowledges they have read the terms and agrees to uphold the reputation of the Green Bastards.`;
+  };
+
+  const handleFormChange = (updates) => {
+    setForm(prev => {
+      const next = { ...prev, ...updates };
+      if (!editingId && !userEditedContract && updates.contract_text === undefined) {
+        next.contract_text = generateContract(next);
+      }
+      return next;
+    });
+  };
 
   const [terminateReason, setTerminateReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -101,6 +149,7 @@ export default function EmployeesPage({ user, onViewProfile }) {
     } else {
       setShowAddModal(false);
       setEditingId(null);
+      setUserEditedContract(false);
       setForm({
         ic_name: "", discord_username: "", position: "Brewer",
         hire_date: new Date().toISOString().slice(0, 10), wage: "", wage_type: "Hourly",
@@ -112,6 +161,7 @@ export default function EmployeesPage({ user, onViewProfile }) {
   };
 
   const handleEditClick = (emp) => {
+    setUserEditedContract(true);
     setForm({
       ic_name: emp.ic_name || "",
       discord_username: emp.discord_username || "",
@@ -166,7 +216,18 @@ export default function EmployeesPage({ user, onViewProfile }) {
           <div style={{ fontSize: 22, fontWeight: "bold", letterSpacing: 1 }}>Employees</div>
           <div style={{ color: "#5a6a5a", fontSize: 13, marginTop: 4 }}>Manage staff and payroll details</div>
         </div>
-        <button onClick={() => setShowAddModal(true)} style={btnStyle}>+ Add Employee</button>
+        <button onClick={() => {
+          setUserEditedContract(false);
+          const initForm = {
+            ic_name: "", discord_username: "", position: "Brewer",
+            hire_date: new Date().toISOString().slice(0, 10), wage: "", wage_type: "Hourly",
+            username: "", password: "", contract_text: ""
+          };
+          initForm.contract_text = generateContract(initForm);
+          setForm(initForm);
+          setEditingId(null);
+          setShowAddModal(true);
+        }} style={btnStyle}>+ Add Employee</button>
       </div>
 
       <div style={{ background: "rgba(15,10,30,0.8)", border: "1px solid rgba(180,140,20,0.15)", borderRadius: 4, overflowX: "auto" }}>
@@ -238,15 +299,15 @@ export default function EmployeesPage({ user, onViewProfile }) {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 <div>
                   <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>IC Name</label>
-                  <input required value={form.ic_name} onChange={e => setForm({...form, ic_name: e.target.value})} style={inputStyle} />
+                  <input required value={form.ic_name} onChange={e => handleFormChange({ic_name: e.target.value})} style={inputStyle} />
                 </div>
                 <div>
                   <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Discord Username</label>
-                  <input value={form.discord_username} onChange={e => setForm({...form, discord_username: e.target.value})} style={inputStyle} />
+                  <input value={form.discord_username} onChange={e => handleFormChange({discord_username: e.target.value})} style={inputStyle} />
                 </div>
                 <div>
                   <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Role</label>
-                  <select value={form.position} onChange={e => setForm({...form, position: e.target.value})} style={inputStyle}>
+                  <select value={form.position} onChange={e => handleFormChange({position: e.target.value})} style={inputStyle}>
                     <option value="Brewer">Brewer</option>
                     <option value="Manager">Manager</option>
                     <option value="CEO">CEO</option>
@@ -255,15 +316,15 @@ export default function EmployeesPage({ user, onViewProfile }) {
                 </div>
                 <div>
                   <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Hire Date</label>
-                  <input type="date" required value={form.hire_date} onChange={e => setForm({...form, hire_date: e.target.value})} style={inputStyle} />
+                  <input type="date" required value={form.hire_date} onChange={e => handleFormChange({hire_date: e.target.value})} style={inputStyle} />
                 </div>
                 <div>
                   <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Wage ($)</label>
-                  <input type="number" step="0.01" required value={form.wage} onChange={e => setForm({...form, wage: e.target.value})} style={inputStyle} />
+                  <input type="number" step="0.01" required value={form.wage} onChange={e => handleFormChange({wage: e.target.value})} style={inputStyle} />
                 </div>
                 <div>
                   <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Wage Type</label>
-                  <select value={form.wage_type} onChange={e => setForm({...form, wage_type: e.target.value})} style={inputStyle}>
+                  <select value={form.wage_type} onChange={e => handleFormChange({wage_type: e.target.value})} style={inputStyle}>
                     <option value="Hourly">Hourly</option>
                     <option value="Salary">Salary</option>
                     <option value="Per Order">Per Order</option>
@@ -271,21 +332,22 @@ export default function EmployeesPage({ user, onViewProfile }) {
                 </div>
                 <div>
                   <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Login Username</label>
-                  <input required value={form.username} onChange={e => setForm({...form, username: e.target.value})} style={inputStyle} />
+                  <input required value={form.username} onChange={e => handleFormChange({username: e.target.value})} style={inputStyle} />
                 </div>
                 <div>
                   <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Temp Password</label>
-                  <input type="password" required value={form.password} onChange={e => setForm({...form, password: e.target.value})} style={inputStyle} />
+                  <input type="password" required value={form.password} onChange={e => handleFormChange({password: e.target.value})} style={inputStyle} />
                 </div>
               </div>
               <div>
                 <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Employment Contract</label>
-                <textarea required value={form.contract_text} onChange={e => setForm({...form, contract_text: e.target.value})} style={{ ...inputStyle, minHeight: 120, resize: "vertical" }} placeholder="Enter the terms of employment here..." />
+                <textarea required value={form.contract_text} onChange={e => { setUserEditedContract(true); handleFormChange({contract_text: e.target.value}); }} style={{ ...inputStyle, minHeight: 120, resize: "vertical" }} placeholder="Enter the terms of employment here..." />
               </div>
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 16 }}>
                 <button type="button" onClick={() => {
                   setShowAddModal(false);
                   setEditingId(null);
+                  setUserEditedContract(false);
                   setForm({
                     ic_name: "", discord_username: "", position: "Brewer",
                     hire_date: new Date().toISOString().slice(0, 10), wage: "", wage_type: "Hourly",

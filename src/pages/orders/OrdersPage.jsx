@@ -878,10 +878,11 @@ export default function OrdersPage({ showFinancial = false, onCreateTransaction 
                                 )}
                               </div>
 
-                              {/* Scaled Ingredients */}
+                              {/* Base & Scaled Ingredients */}
                               {recipe.recipe_ingredients &&
                                 recipe.recipe_ingredients.length > 0 && (
                                   <div style={{ marginBottom: recipe.notes ? 8 : 0 }}>
+                                    {/* Base Ingredients */}
                                     <div
                                       style={{
                                         color: "#5a6a5a",
@@ -891,7 +892,41 @@ export default function OrdersPage({ showFinancial = false, onCreateTransaction 
                                         marginBottom: 4,
                                       }}
                                     >
-                                      Ingredients (scaled ×{item.quantity})
+                                      Ingredients
+                                    </div>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        flexWrap: "wrap",
+                                        gap: "4px 16px",
+                                        marginBottom: 12,
+                                      }}
+                                    >
+                                      {recipe.recipe_ingredients.map((ing) => (
+                                        <div
+                                          key={`base-${ing.id}`}
+                                          style={{
+                                            color: "#8a9a8a",
+                                            fontSize: 12,
+                                          }}
+                                        >
+                                          {ing.quantity}
+                                          {ing.unit || "x"} {ing.ingredient_name}
+                                        </div>
+                                      ))}
+                                    </div>
+
+                                    {/* Scaled Ingredients */}
+                                    <div
+                                      style={{
+                                        color: "#5a6a5a",
+                                        fontSize: 10,
+                                        textTransform: "uppercase",
+                                        letterSpacing: 1,
+                                        marginBottom: 4,
+                                      }}
+                                    >
+                                      Total Ingredients (scaled ×{item.quantity})
                                     </div>
                                     <div
                                       style={{
@@ -906,14 +941,14 @@ export default function OrdersPage({ showFinancial = false, onCreateTransaction 
                                           (item.quantity || 1);
                                         return (
                                           <div
-                                            key={ing.id}
+                                            key={`scaled-${ing.id}`}
                                             style={{
                                               color: "#8a9a8a",
                                               fontSize: 12,
                                             }}
                                           >
                                             {scaled}
-                                            {ing.unit || ""} {ing.ingredient_name}
+                                            {ing.unit || "x"} {ing.ingredient_name}
                                           </div>
                                         );
                                       })}

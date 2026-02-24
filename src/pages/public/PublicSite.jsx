@@ -96,7 +96,6 @@ export default function PublicSite() {
   const [products, setProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [productsError, setProductsError] = useState(null);
-  const [showAllProducts, setShowAllProducts] = useState(true);
 
   // order form
   const [quantities, setQuantities] = useState({});
@@ -145,8 +144,8 @@ export default function PublicSite() {
   }, []);
 
   // ── order helpers ──
-  const inStockProducts = products.filter((p) => p.in_stock && p.stock_qty > 0);
-  const displayProducts = showAllProducts ? products : products.filter((p) => p.in_stock && p.stock_qty > 0);
+  const inStockProducts = products;
+  const displayProducts = products;
 
   const setQty = (productId, val) => {
     const n = Math.max(0, parseInt(val, 10) || 0);
@@ -355,24 +354,7 @@ export default function PublicSite() {
             <div style={goldUnderline} />
           </div>
 
-          {/* Filter toggle */}
-          {!loadingProducts && !productsError && products.length > 0 && (
-            <div style={{ textAlign: "center", marginBottom: 32 }}>
-              <button
-                onClick={() => setShowAllProducts((v) => !v)}
-                style={{
-                  ...btnOutline,
-                  padding: "8px 20px",
-                  fontSize: 12,
-                  borderWidth: 1,
-                }}
-                onMouseEnter={(e) => { e.target.style.background = C.gold; e.target.style.color = C.bg; }}
-                onMouseLeave={(e) => { e.target.style.background = "transparent"; e.target.style.color = C.gold; }}
-              >
-                {showAllProducts ? "Available Only" : "Show All"}
-              </button>
-            </div>
-          )}
+          {/* Filter toggle removed as all products are available */}
 
           {/* Loading */}
           {loadingProducts && (
@@ -402,7 +384,7 @@ export default function PublicSite() {
               gap: 24,
             }}>
               {displayProducts.map((p) => {
-                const available = p.in_stock && p.stock_qty > 0;
+                const available = true;
                 const isHovered = hoveredCard === p.id;
                 return (
                   <div key={p.id}
