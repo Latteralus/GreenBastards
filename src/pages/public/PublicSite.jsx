@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "../../supabaseClient";
 import { fmt } from "../../helpers";
 
@@ -744,8 +745,8 @@ export default function PublicSite() {
         <div style={{ color: C.textVMuted, fontSize: 12, marginBottom: 24 }}>
           © 2026 Green Bastards Brewery. All rights reserved.
         </div>
-        <a
-          href="/login"
+        <Link
+          to="/login"
           style={{
             color: C.textVMuted, fontSize: 11, textDecoration: "none",
             letterSpacing: 1, textTransform: "uppercase",
@@ -755,7 +756,7 @@ export default function PublicSite() {
           onMouseLeave={(e) => (e.target.style.color = C.textVMuted)}
         >
           Staff Portal
-        </a>
+        </Link>
       </footer>
     </div>
   );
