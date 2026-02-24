@@ -36,6 +36,7 @@ export default function OrdersPage({ showFinancial = false, onCreateTransaction 
   const [orders, setOrders] = useState([]);
   const [recipes, setRecipes] = useState([]);
   const [brewers, setBrewers] = useState([]);
+  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState("All");
@@ -43,6 +44,19 @@ export default function OrdersPage({ showFinancial = false, onCreateTransaction 
   const [cancellingId, setCancellingId] = useState(null);
   const [cancelReason, setCancelReason] = useState("");
   const [mutating, setMutating] = useState(false);
+
+  // Add Order Modal State
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addForm, setAddForm] = useState({
+    customer_ic_name: "",
+    customer_discord: "",
+    delivery_method: "Pickup",
+    delivery_location: "",
+    notes: "",
+    status: "Confirmed",
+  });
+  const [addQuantities, setAddQuantities] = useState({});
+  const [submittingAdd, setSubmittingAdd] = useState(false);
 
   // ─── Data Fetching ────────────────────────────────────────────────────────────
 
@@ -84,17 +98,31 @@ export default function OrdersPage({ showFinancial = false, onCreateTransaction 
     );
   }
 
+  async function fetchProducts() {
+    const { data, error: err } = await supabase
+      .from("products")
+      .select("*")
+      .order("name");
+    if (err) {
+      console.error("Error fetching products:", err);
+      return [];
+    }
+    return data || [];
+  }
+
   async function loadAll() {
     setLoading(true);
     setError(null);
-    const [o, r, b] = await Promise.all([
+    const [o, r, b, p] = await Promise.all([
       fetchOrders(),
       fetchRecipes(),
       fetchBrewers(),
+      fetchProducts(),
     ]);
     setOrders(o);
     setRecipes(r);
     setBrewers(b);
+    setProducts(p);
     setLoading(false);
   }
 
@@ -214,6 +242,86 @@ export default function OrdersPage({ showFinancial = false, onCreateTransaction 
     const fresh = await fetchOrders();
     setOrders(fresh);
     setMutating(false);
+  }
+
+  async function handleAddOrder(e) {
+    e.preventDefault();
+    setSubmittingAdd(true);
+
+    let totalCost = 0;
+    const items = [];
+    Object.keys(addQuantities).forEach((id) => {
+      const qty = addQuantities[id];
+      if (qty > 0) {
+        const product = products.find((p) => p.id === id);
+        if (product) {
+          totalCost += product.price * qty;
+          items.push({
+            product_id: product.id,
+            product_name: product.name,
+            quantity: qty,
+            unit_price: product.price,
+            subtotal: Math.round(product.price * qty * 100) / 100,
+          });
+        }
+      }
+    });
+
+    if (items.length === 0) {
+      alert("Please add at least one item to the order.");
+      setSubmittingAdd(false);
+      return;
+    }
+
+    try {
+      const { data: orderData, error: orderErr } = await supabase
+        .from("orders")
+        .insert({
+          customer_ic_name: addForm.customer_ic_name.trim(),
+          customer_discord: addForm.customer_discord.trim() || null,
+          delivery_method: addForm.delivery_method,
+          delivery_location:
+            addForm.delivery_method === "Delivery"
+              ? addForm.delivery_location.trim()
+              : null,
+          total_cost: Math.round(totalCost * 100) / 100,
+          notes: addForm.notes.trim() || null,
+          status: addForm.status,
+          payment_confirmed: addForm.status !== "Submitted" && addForm.status !== "Awaiting Payment"
+        })
+        .select("id")
+        .single();
+
+      if (orderErr) throw orderErr;
+
+      const orderId = orderData.id;
+
+      const itemsToInsert = items.map((i) => ({ ...i, order_id: orderId }));
+      const { error: itemsErr } = await supabase
+        .from("order_items")
+        .insert(itemsToInsert);
+
+      if (itemsErr) throw itemsErr;
+
+      setAddForm({
+        customer_ic_name: "",
+        customer_discord: "",
+        delivery_method: "Pickup",
+        delivery_location: "",
+        notes: "",
+        status: "Confirmed",
+      });
+      setAddQuantities({});
+      setShowAddModal(false);
+
+      const fresh = await fetchOrders();
+      setOrders(fresh);
+    } catch (err) {
+      console.error("Error adding order:", err);
+      setError("Failed to add order.");
+    } finally {
+      setSubmittingAdd(false);
+    }
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -353,13 +461,21 @@ export default function OrdersPage({ showFinancial = false, onCreateTransaction 
   return (
     <div style={{ fontFamily: "Georgia, serif", color: "#e8e0d0" }}>
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 22, fontWeight: "bold", letterSpacing: 1 }}>
-          Order Management
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 28 }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: "bold", letterSpacing: 1 }}>
+            Order Management
+          </div>
+          <div style={{ color: "#5a6a5a", fontSize: 13, marginTop: 6 }}>
+            Manage customer orders through the fulfillment lifecycle
+          </div>
         </div>
-        <div style={{ color: "#5a6a5a", fontSize: 13, marginTop: 6 }}>
-          Manage customer orders through the fulfillment lifecycle
-        </div>
+        <button
+          onClick={() => setShowAddModal(true)}
+          style={{ ...goldBtnStyle }}
+        >
+          + Add Order
+        </button>
       </div>
 
       {/* ── Error Banner ───────────────────────────────────────────────── */}
@@ -1163,6 +1279,125 @@ export default function OrdersPage({ showFinancial = false, onCreateTransaction 
           );
         })}
       </div>
+      {/* ── Add Order Modal ─────────────────────────────────────────────── */}
+      {showAddModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.8)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              background: "#0d0a1a",
+              border: "1px solid rgba(180,140,20,0.3)",
+              borderRadius: 4,
+              width: 600,
+              maxHeight: "90vh",
+              overflowY: "auto",
+              padding: 32,
+            }}
+          >
+            <h2 style={{ color: "#c8a820", marginTop: 0, marginBottom: 20 }}>
+              Add Order
+            </h2>
+            <form
+              onSubmit={handleAddOrder}
+              style={{ display: "flex", flexDirection: "column", gap: 16 }}
+            >
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div>
+                  <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>IC Name</label>
+                  <input required value={addForm.customer_ic_name} onChange={e => setAddForm({...addForm, customer_ic_name: e.target.value})} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Discord Username</label>
+                  <input value={addForm.customer_discord} onChange={e => setAddForm({...addForm, customer_discord: e.target.value})} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Delivery Method</label>
+                  <select value={addForm.delivery_method} onChange={e => setAddForm({...addForm, delivery_method: e.target.value})} style={inputStyle}>
+                    <option value="Pickup">Pickup</option>
+                    <option value="Delivery">Delivery</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Delivery Location</label>
+                  <input value={addForm.delivery_location} onChange={e => setAddForm({...addForm, delivery_location: e.target.value})} style={{ ...inputStyle, opacity: addForm.delivery_method === "Delivery" ? 1 : 0.5 }} disabled={addForm.delivery_method !== "Delivery"} />
+                </div>
+                <div>
+                  <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Status</label>
+                  <select value={addForm.status} onChange={e => setAddForm({...addForm, status: e.target.value})} style={inputStyle}>
+                    {STATUS_LIST.filter(s => s !== "All").map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Notes</label>
+                <textarea value={addForm.notes} onChange={e => setAddForm({...addForm, notes: e.target.value})} style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} />
+              </div>
+
+              <div style={{ borderTop: "1px solid rgba(180,140,20,0.15)", paddingTop: 16 }}>
+                <label style={{ display: "block", color: "#c8a820", fontSize: 12, marginBottom: 12, textTransform: "uppercase", fontWeight: "bold" }}>Products</label>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 200, overflowY: "auto", paddingRight: 8 }}>
+                  {products.map(p => (
+                    <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255,255,255,0.02)", padding: "8px 12px", borderRadius: 3 }}>
+                      <div>
+                        <span style={{ color: "#e8e0d0", fontSize: 13 }}>{p.name}</span>
+                        <span style={{ color: "#8a9a8a", fontSize: 11, marginLeft: 8 }}>{fmt(p.price)}</span>
+                      </div>
+                      <input 
+                        type="number" 
+                        min="0" 
+                        value={addQuantities[p.id] || ""} 
+                        onChange={e => {
+                          const val = parseInt(e.target.value) || 0;
+                          setAddQuantities(prev => ({ ...prev, [p.id]: val }));
+                        }}
+                        style={{ ...inputStyle, width: 60, padding: "4px 8px", textAlign: "center" }} 
+                        placeholder="0"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 16 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  style={{
+                    background: "transparent",
+                    border: "1px solid #5a6a5a",
+                    color: "#8a9a8a",
+                    padding: "8px 16px",
+                    borderRadius: 3,
+                    cursor: "pointer",
+                    fontFamily: "Georgia, serif",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingAdd}
+                  style={{ ...goldBtnStyle, opacity: submittingAdd ? 0.6 : 1 }}
+                >
+                  {submittingAdd ? "Saving..." : "Add Order"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
