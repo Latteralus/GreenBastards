@@ -45,10 +45,8 @@ export default function EmployeesPage({ user, onViewProfile }) {
   
   // Add Employee Form State
   const [form, setForm] = useState({
-    full_name: "",
     ic_name: "",
     discord_username: "",
-    email: "",
     position: "Brewer",
     hire_date: new Date().toISOString().slice(0, 10),
     wage: "",
@@ -104,7 +102,7 @@ export default function EmployeesPage({ user, onViewProfile }) {
       setShowAddModal(false);
       setEditingId(null);
       setForm({
-        full_name: "", ic_name: "", discord_username: "", email: "", position: "Brewer",
+        ic_name: "", discord_username: "", position: "Brewer",
         hire_date: new Date().toISOString().slice(0, 10), wage: "", wage_type: "Hourly",
         username: "", password: "", contract_text: ""
       });
@@ -115,10 +113,8 @@ export default function EmployeesPage({ user, onViewProfile }) {
 
   const handleEditClick = (emp) => {
     setForm({
-      full_name: emp.full_name || "",
       ic_name: emp.ic_name || "",
       discord_username: emp.discord_username || "",
-      email: emp.email || "",
       position: emp.position || "Brewer",
       hire_date: emp.hire_date || new Date().toISOString().slice(0, 10),
       wage: emp.wage || "",
@@ -178,7 +174,6 @@ export default function EmployeesPage({ user, onViewProfile }) {
           <thead>
             <tr style={{ color: "#8a9a8a", borderBottom: "1px solid rgba(180,140,20,0.2)", textAlign: "left" }}>
               <th style={{ padding: "12px 16px", width: 40, textAlign: "center" }}>Contract</th>
-              <th style={{ padding: "12px 16px" }}>Name</th>
               <th style={{ padding: "12px 16px" }}>IC Name</th>
               <th style={{ padding: "12px 16px" }}>Role</th>
               <th style={{ padding: "12px 16px" }}>Hire Date</th>
@@ -198,7 +193,6 @@ export default function EmployeesPage({ user, onViewProfile }) {
                   <td style={{ padding: "12px 16px", textAlign: "center", fontSize: 16 }}>
                     {emp.contract_agreed ? <span style={{ color: "#50c860" }}>✓</span> : <span style={{ color: "#e09030" }}>⏱</span>}
                   </td>
-                  <td style={{ padding: "12px 16px" }}>{emp.full_name || "—"}</td>
                   <td style={{ padding: "12px 16px" }}>{emp.ic_name || "—"}</td>
                   <td style={{ padding: "12px 16px" }}>
                     <span style={{ 
@@ -243,20 +237,12 @@ export default function EmployeesPage({ user, onViewProfile }) {
             <form onSubmit={handleAddSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 <div>
-                  <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Full Name</label>
-                  <input required value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})} style={inputStyle} />
-                </div>
-                <div>
                   <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>IC Name</label>
                   <input required value={form.ic_name} onChange={e => setForm({...form, ic_name: e.target.value})} style={inputStyle} />
                 </div>
                 <div>
                   <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Discord Username</label>
                   <input value={form.discord_username} onChange={e => setForm({...form, discord_username: e.target.value})} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Email</label>
-                  <input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} style={inputStyle} />
                 </div>
                 <div>
                   <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Role</label>
@@ -289,7 +275,7 @@ export default function EmployeesPage({ user, onViewProfile }) {
                 </div>
                 <div>
                   <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Temp Password</label>
-                  <input required value={form.password} onChange={e => setForm({...form, password: e.target.value})} style={inputStyle} />
+                  <input type="password" required value={form.password} onChange={e => setForm({...form, password: e.target.value})} style={inputStyle} />
                 </div>
               </div>
               <div>
@@ -301,7 +287,7 @@ export default function EmployeesPage({ user, onViewProfile }) {
                   setShowAddModal(false);
                   setEditingId(null);
                   setForm({
-                    full_name: "", ic_name: "", discord_username: "", email: "", position: "Brewer",
+                    ic_name: "", discord_username: "", position: "Brewer",
                     hire_date: new Date().toISOString().slice(0, 10), wage: "", wage_type: "Hourly",
                     username: "", password: "", contract_text: ""
                   });
@@ -317,7 +303,7 @@ export default function EmployeesPage({ user, onViewProfile }) {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
           <div style={{ background: "#0d0a1a", border: "1px solid rgba(224,80,80,0.5)", borderRadius: 4, width: 400, padding: 32 }}>
             <h2 style={{ color: "#e05050", marginTop: 0, marginBottom: 20 }}>Terminate Employee</h2>
-            <p style={{ fontSize: 14, marginBottom: 20 }}>Are you sure you want to terminate <strong>{showTerminateModal.full_name} ({showTerminateModal.ic_name})</strong>?</p>
+            <p style={{ fontSize: 14, marginBottom: 20 }}>Are you sure you want to terminate <strong>{showTerminateModal.ic_name || showTerminateModal.username}</strong>?</p>
             <form onSubmit={handleTerminate}>
               <label style={{ display: "block", color: "#8a9a8a", fontSize: 11, marginBottom: 4, textTransform: "uppercase" }}>Reason for Termination</label>
               <textarea required value={terminateReason} onChange={e => setTerminateReason(e.target.value)} style={{ ...inputStyle, minHeight: 80, marginBottom: 20 }} />

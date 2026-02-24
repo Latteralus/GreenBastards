@@ -140,7 +140,7 @@ export default function EmployeeProfile({ user, employeeId, onBack }) {
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
         <div>
-          <div style={{ fontSize: 22, fontWeight: "bold", letterSpacing: 1 }}>{employee.full_name} ({employee.ic_name})</div>
+          <div style={{ fontSize: 22, fontWeight: "bold", letterSpacing: 1 }}>{employee.ic_name || employee.username}</div>
           <div style={{ color: "#5a6a5a", fontSize: 13, marginTop: 4 }}>{employee.position} · {employee.status}</div>
         </div>
       </div>
@@ -158,9 +158,8 @@ export default function EmployeeProfile({ user, employeeId, onBack }) {
           <div style={{ color: "#5a6a5a", marginBottom: 16 }}>─────────────────────────────────────</div>
           
           <div style={{ display: "grid", gridTemplateColumns: "150px 1fr", gap: 8, fontSize: 13, marginBottom: 16, color: "#8a9a8a" }}>
-            <div>Employee:</div><div style={{ color: "#e8e0d0" }}>{employee.full_name}</div>
-            <div>IC Name:</div><div style={{ color: "#e8e0d0" }}>{employee.ic_name}</div>
-            <div>Discord:</div><div style={{ color: "#e8e0d0" }}>{employee.discord_username}</div>
+            <div>IC Name:</div><div style={{ color: "#e8e0d0" }}>{employee.ic_name || employee.username}</div>
+            <div>Discord:</div><div style={{ color: "#e8e0d0" }}>{employee.discord_username || "—"}</div>
             <div>Role:</div><div style={{ color: "#e8e0d0" }}>{employee.position}</div>
             <div>Hire Date:</div><div style={{ color: "#e8e0d0" }}>{employee.hire_date}</div>
             <div>Wage:</div><div style={{ color: "#e8e0d0" }}>{fmt(employee.wage)} / {employee.wage_type}</div>

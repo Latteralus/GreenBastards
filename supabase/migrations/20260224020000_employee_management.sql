@@ -6,10 +6,8 @@
 
 -- Step 1: Extend accounts table
 alter table accounts
-  add column if not exists full_name text,
   add column if not exists ic_name text,
   add column if not exists discord_username text,
-  add column if not exists email text,
   add column if not exists hire_date date,
   add column if not exists wage numeric(10,2),
   add column if not exists wage_type text check (
@@ -29,7 +27,7 @@ update accounts set status = 'Active' where status is null;
 create table if not exists paystubs (
   id uuid primary key default gen_random_uuid(),
   account_id uuid references accounts(id),
-  transaction_id uuid references transactions(id),
+  transaction_id bigint references transactions(id),
   pay_period_start date,
   pay_period_end date,
   hours_worked numeric(6,2),

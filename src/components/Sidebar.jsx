@@ -14,18 +14,18 @@ export default function Sidebar({ active, setActive, user, onLogout, pendingCoun
     navItems = [
       { id: "myorders", label: "My Orders", icon: "▢" },
       { id: "queue", label: "Production Queue", icon: "◱" },
-      { id: "recipes", label: "Recipe Book", icon: "📖" },
-      { id: "profile", label: "My Profile", icon: "👤" }
+      { id: "recipes", label: "Recipe Book", icon: "▥" },
+      { id: "profile", label: "My Profile", icon: "◪" }
     ];
   } else if (role === 'Manager' || role === 'CEO') {
     navItems = [
       { id: "orders", label: "All Orders", icon: "▢" },
       { id: "queue", label: "Production Queue", icon: "◱" },
       { id: "forecasting", label: "Forecasting", icon: "◒" },
-      { id: "recipes", label: "Recipe Book", icon: "📖" },
-      { id: "employees", label: "Employees", icon: "👥" },
+      { id: "recipes", label: "Recipe Book", icon: "▥" },
+      { id: "employees", label: "Employees", icon: "⊟" },
       { id: "products", label: "Products & Recipes", icon: "⬡" },
-      { id: "profile", label: "My Profile", icon: "👤" }
+      { id: "profile", label: "My Profile", icon: "◪" }
     ];
   } else if (role === 'CFO') {
     navItems = [
@@ -38,11 +38,11 @@ export default function Sidebar({ active, setActive, user, onLogout, pendingCoun
       { id: "orders", label: "All Orders", icon: "▢" },
       { id: "queue", label: "Production Queue", icon: "◱" },
       { id: "forecasting", label: "Forecasting", icon: "◒" },
-      { id: "recipes", label: "Recipe Book", icon: "📖" },
-      { id: "employees", label: "Employees", icon: "👥" },
+      { id: "recipes", label: "Recipe Book", icon: "▥" },
+      { id: "employees", label: "Employees", icon: "⊟" },
       { id: "products", label: "Products & Recipes", icon: "⬡" },
       { id: "settings", label: "Settings", icon: "⚙" },
-      { id: "profile", label: "My Profile", icon: "👤" }
+      { id: "profile", label: "My Profile", icon: "◪" }
     ];
   }
 

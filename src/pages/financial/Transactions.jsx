@@ -59,7 +59,7 @@ export default function Transactions({ transactions, onTransactionUpdate, user, 
           amt = parseFloat(emp.wage).toFixed(2);
         }
         
-        const memo = `Payroll — ${emp.full_name || emp.username} (${emp.ic_name || "N/A"}) — ${form.pay_period_start} to ${form.pay_period_end}`;
+        const memo = `Payroll — ${emp.ic_name || emp.username} — ${form.pay_period_start} to ${form.pay_period_end}`;
         
         setForm(f => ({ ...f, amount: amt, memo }));
       }
@@ -207,7 +207,7 @@ export default function Transactions({ transactions, onTransactionUpdate, user, 
                     <option value="">-- Select Employee --</option>
                     {activeEmployees.map(emp => (
                       <option key={emp.id} value={emp.id}>
-                        {emp.full_name || emp.username} — {emp.position} — ${emp.wage} / {emp.wage_type}
+                        {emp.ic_name || emp.username} — {emp.position} — ${emp.wage} / {emp.wage_type}
                       </option>
                     ))}
                   </select>
