@@ -76,8 +76,4 @@ on conflict (username) do nothing;
 -- 7. Seed some sample products for testing
 insert into public.products (name, description, price, in_stock, stock_qty) values
   ('Bastard Ale', 'A classic amber ale brewed with the finest in-game hops. Rich malty flavor with a smooth finish.', 15.00, true, 24),
-  ('Green Dragon Stout', 'Dark, bold, and full-bodied stout with hints of chocolate and roasted barley.', 18.00, true, 12),
-  ('Hop Goblin IPA', 'A hop-forward India Pale Ale with citrus and pine notes. Not for the faint of heart.', 20.00, true, 18),
-  ('Redmont Wheat', 'Light and refreshing wheat beer, perfect for a day of governance.', 12.00, true, 30),
-  ('Moonshine Reserve', 'Triple-distilled and barrel-aged. Our most premium spirit.', 45.00, true, 6),
   ('Glow Berry Mead', 'Sweet mead brewed with rare Glow Berries from the Deep Dark. Limited edition.', 35.00, false, 0);
